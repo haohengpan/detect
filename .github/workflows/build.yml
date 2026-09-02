@@ -22,8 +22,9 @@ jobs:
           Invoke-WebRequest -Uri https://github.com/microsoft/Detours/archive/refs/tags/v4.0.1.zip -OutFile detours.zip
           tar -xf detours.zip
           Rename-Item Detours-4.0.1 detours
-          cd detours
+          cd detours\src
           nmake
+          Get-Item ..\lib.X86\detours.lib | Format-List Name,Length
 
       - name: Fetch spdlog
         shell: pwsh
@@ -41,7 +42,7 @@ jobs:
           Get-ChildItem external\detours\lib.X86, external\detours\include, external\spdlog\include
 
       - name: Build iseethedead.dll
-        run: msbuild iseethedead.sln /m /p:Configuration=Release /p:Platform=Win32
+        run: msbuild iseethedead.sln /m /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v145
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
