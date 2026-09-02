@@ -44,6 +44,9 @@ jobs:
       - name: Build iseethedead.dll
         run: msbuild iseethedead.sln /m /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v145
 
+      - name: Build injector
+        run: cl /nologo /O2 /W3 inject\inject.c /Fe:Release\inject.exe
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -51,4 +54,5 @@ jobs:
           path: |
             Release\iseethedead.dll
             Release\iseethedead.pdb
+            Release\inject.exe
           if-no-files-found: error
