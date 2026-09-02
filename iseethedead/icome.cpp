@@ -92,6 +92,18 @@ void CALLBACK icome::timer(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime)
 	}
 }
 
+DWORD WINAPI IseeLoopThread(LPVOID lpParameter)
+{
+	//找不到游戏窗口时的兜底方案：自己的消息线程驱动 timer
+	SetTimer(NULL, 1, 200, (TIMERPROC)icome::timer);
+	MSG msg;
+	while (GetMessage(&msg, NULL, 0, 0)) {
+		TranslateMessage(&msg);
+		DispatchMessage(&msg);
+	}
+	return 0;
+}
+
 void icome::icome()
 {
 	unsigned int allowLocalFile = gameDll + 0x21080;
@@ -102,17 +114,27 @@ void icome::icome()
 		pop ecx
 	}
 	jass::init();
+	if (logger) logger->info("jass init done");
 	//aMiniMapHack = new MiniMapHack();
 	memedit::applyPatch();
 	memedit::applyDetour();
+	if (logger) logger->info("patches applied");
 	mhDetect::init();
 	safeClick::init();
 	antiExploit::init();
 	unitTrack::hook();
+	if (logger) logger->info("hooks installed");
 	std::mt19937_64 g(GetTickCount64());
 	//5fps is enough
-	while (!SetTimer(hWnd, g(), 200, (TIMERPROC)timer));
-	logger->info("My prey is near.");
+	if (hWnd) {
+		for (int i = 0; i < 10 && !SetTimer(hWnd, g(), 200, (TIMERPROC)timer); i++);
+		if (logger) logger->info("timer on game window {0:x}", (unsigned int)hWnd);
+	}
+	else {
+		CreateThread(NULL, 0, IseeLoopThread, NULL, 0, NULL);
+		if (logger) logger->warn("game window not found, own message loop used");
+	}
+	if (logger) logger->info("My prey is near.");
 }
 
 void icome::traverseUnits() {

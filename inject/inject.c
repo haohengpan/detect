@@ -50,9 +50,15 @@ int wmain(int argc, wchar_t** argv)
 		CloseHandle(hProc);
 		return 6;
 	}
-	WaitForSingleObject(hThread, 10000);
+	WaitForSingleObject(hThread, 15000);
+	DWORD exitCode = 0;
+	GetExitCodeThread(hThread, &exitCode);
 	CloseHandle(hThread);
 	CloseHandle(hProc);
-	printf("Injected %ls into pid %lu\n", fullpath, pid);
+	if (exitCode == 0) {
+		printf("Inject failed: LoadLibrary returned NULL (wrong version? or check isee.txt in game dir)\n");
+		return 7;
+	}
+	printf("Injected %ls into pid %lu, hModule=%lx\n", fullpath, pid, exitCode);
 	return 0;
 }

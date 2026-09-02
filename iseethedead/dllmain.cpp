@@ -19,24 +19,30 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 	case DLL_PROCESS_ATTACH:
 	{
 		hIsee = (unsigned int)hModule;
-		if (WarcraftVersion() == 52240) {
+		unsigned int ver = WarcraftVersion();
+		if (ver == 52240) {
 			DisableThreadLibraryCalls(hModule);
 			HideLDRTable(hModule);
 			gameDll = (unsigned int)GetModuleHandle(L"Game.dll");
-			hWnd = FindWindowW(L"Warcraft III", L"Warcraft III");
+			//窗口标题可能是中文，按类名查找更可靠
+			hWnd = FindWindowW(L"Warcraft III", NULL);
+			if (!hWnd) hWnd = FindWindowW(NULL, L"Warcraft III");
+			try
+			{
+				logger = spdlog::basic_logger_mt("isee", "isee.txt");
+				logger->flush_on(spdlog::level::warn);
+			}
+			catch (const spdlog::spdlog_ex& ex)
+			{
+				std::cerr << "Log init failed: " << ex.what() << std::endl;
+			}
+			if (logger) logger->info("attached: gameDll {0:x} hWnd {1:x} ver {2}", gameDll, (unsigned int)hWnd, ver);
 			if (gameDll) {
-				try
-				{
-					logger = spdlog::basic_logger_mt("isee", "isee.txt");
-					logger->flush_on(spdlog::level::warn);
-				}
-				catch (const spdlog::spdlog_ex& ex)
-				{
-					std::cerr << "Log init failed: " << ex.what() << std::endl;
-				}
 				icome::icome();
 			}
-		
+			else if (logger) {
+				logger->error("Game.dll not loaded yet, inject after the game reaches main menu");
+			}
 		}
 		else {
 			MessageBoxW(NULL, L"Support WarCraft III 1.27 only", L"Warning", MB_ICONSTOP | MB_APPLMODAL | MB_TOPMOST);
