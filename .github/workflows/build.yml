@@ -1,0 +1,53 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup MSVC x86 environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x86
+
+      - name: Build Detours
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri https://github.com/microsoft/Detours/archive/refs/tags/v4.0.1.zip -OutFile detours.zip
+          tar -xf detours.zip
+          Rename-Item Detours-4.0.1 detours
+          cd detours
+          nmake
+
+      - name: Fetch spdlog
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri https://github.com/gabime/spdlog/archive/refs/tags/v1.14.1.zip -OutFile spdlog.zip
+          tar -xf spdlog.zip
+          Rename-Item spdlog-1.14.1 spdlog
+
+      - name: Lay out external deps
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force external | Out-Null
+          Move-Item detours external\detours
+          Move-Item spdlog external\spdlog
+          Get-ChildItem external\detours\lib.X86, external\detours\include, external\spdlog\include
+
+      - name: Build iseethedead.dll
+        run: msbuild iseethedead.sln /m /p:Configuration=Release /p:Platform=Win32
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: iseethedead
+          path: |
+            x86\Release\iseethedead.dll
+            x86\Release\iseethedead.pdb
+          if-no-files-found: error

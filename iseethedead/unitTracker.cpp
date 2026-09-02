@@ -1,4 +1,4 @@
-#include "pch.h"
+ï»¿#include "pch.h"
 #include "unitTracker.h"
 #include "player.h"
 #include <list>
@@ -58,11 +58,11 @@ bool unitTrack::addNewUnit(unsigned int handle, unsigned int object) {
 	}
 	if (character == 1 || character == 5) {
 		if (allunits.find(handle) == allunits.end()) {
-			//Ô­À´Ã»ÓĞÕâ¸öµ¥Î»
+			//åŸæ¥æ²¡æœ‰è¿™ä¸ªå•ä½
 			allunits[handle] = std::make_shared<W3unit>(handle, object, character);
 		}
 		else {
-			//Ô­À´ÓĞ ÏÈÉ¾³ı¾ÉµÄ
+			//åŸæ¥æœ‰ å…ˆåˆ é™¤æ—§çš„
 			allunits.erase(handle);
 			allunits[handle] = std::make_shared<W3unit>(handle, object, character);
 		}

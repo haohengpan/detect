@@ -1,4 +1,4 @@
-#include "pch.h"
+ï»¿#include "pch.h"
 #include "player.h"
 #include "safeclick.h"
 
@@ -16,8 +16,8 @@ bool __stdcall safeClick::SendActionHandler(CAction* lpAction)
 			CUnit* unit = (CUnit*)jass::GetUnitThroughId(sa->dwUnitIds[0][0], sa->dwUnitIds[0][1]);
 			if (unit) {
 				unsigned int hUnit = ObjectToHandle(unit);
-				//´Ë´¦ÐèÒªÅÐ¶ÏÊÇ·ñÓÐÊÓÒ°µÄÔ­ÒòÊÇ Ö»ÓÐÏÈµã»÷µ¥Î»²ÅÄÜ¶ÔÆä·¢²¼ÃüÁî
-				//Èç¹ûÖ±½Ó·µ»Øfalse»áµ¼ÖÂ ÎÞ·¨¹ºÂòÎïÆ· ÎÞ·¨A S H M ºÍÊÍ·ÅÈÎºÎ¼¼ÄÜ Èç¹ûÓÃÀ´Õû±ðÈËµ½Ê±ÐÐ¡£¡£¡£
+				//æ­¤å¤„éœ€è¦åˆ¤æ–­æ˜¯å¦æœ‰è§†é‡Žçš„åŽŸå› æ˜¯ åªæœ‰å…ˆç‚¹å‡»å•ä½æ‰èƒ½å¯¹å…¶å‘å¸ƒå‘½ä»¤
+				//å¦‚æžœç›´æŽ¥è¿”å›žfalseä¼šå¯¼è‡´ æ— æ³•è´­ä¹°ç‰©å“ æ— æ³•A S H M å’Œé‡Šæ”¾ä»»ä½•æŠ€èƒ½ å¦‚æžœç”¨æ¥æ•´åˆ«äººåˆ°æ—¶è¡Œã€‚ã€‚ã€‚
 				if (!unit->IsVisibleToPlayer(PlayerLocal()) && !jass::GetPlayerAlliance(aPlayerInfo->getLocalPlayer(), jass::GetOwningPlayer(hUnit), 5)) {
 					ret = false;
 				}

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "pch.h"
 struct UnitSelectionModifyObjects {
 	unsigned int ObjectID1;
@@ -63,16 +63,16 @@ namespace mhDetect {
 	enum Cmd
 	{
 		SMART = 0xD0002,
-		MOVE = 0xD0003,	//�ƶ�
-		ATTACK = 0xD000F,	//����
-		HOLD = 0xD0019,	//ֹͣ H
-		STOP = 0xD0004,	//ֹͣ S
-		ITEM1 = 0xD0028, //��Ʒ1
-		ITEM2 = 0xD0029, //��Ʒ2
-		ITEM3 = 0xD002A, //��Ʒ3
-		ITEM4 = 0xD002B, //��Ʒ4
-		ITEM5 = 0xD002C, //��Ʒ5
-		ITEM6 = 0xD002D, //��Ʒ6
-		PATROL = 0xD0016 //Ѳ��
+		MOVE = 0xD0003,	//移动
+		ATTACK = 0xD000F,	//攻击
+		HOLD = 0xD0019,	//停止 H
+		STOP = 0xD0004,	//停止 S
+		ITEM1 = 0xD0028, //物品1
+		ITEM2 = 0xD0029, //物品2
+		ITEM3 = 0xD002A, //物品3
+		ITEM4 = 0xD002B, //物品4
+		ITEM5 = 0xD002C, //物品5
+		ITEM6 = 0xD002D, //物品6
+		PATROL = 0xD0016 //巡逻
 	};
 }

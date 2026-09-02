@@ -1,4 +1,4 @@
-#include "pch.h"
+ï»¿#include "pch.h"
 #include "unit.h"
 #include "tools.h"
 #include "miniMapHack.h"
@@ -83,7 +83,7 @@ void W3unit::minimapIndicate()
 
 W3unit::~W3unit()
 {
-	//´Ë´¦µÄ2¸öÌõ¼şÎªÁËÔÚÓÎÏ·¹Ø±ÕÊ± ·ÀÖ¹±¨´í
+	//æ­¤å¤„çš„2ä¸ªæ¡ä»¶ä¸ºäº†åœ¨æ¸¸æˆå…³é—­æ—¶ é˜²æ­¢æŠ¥é”™
 	if (jass_tag != NULL && IsGameObjectPresent() && IsInGame()) {
 		jass::DestroyTextTag(jass_tag);
 	}
