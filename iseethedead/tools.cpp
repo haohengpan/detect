@@ -20,16 +20,18 @@ int filter(unsigned int code, struct _EXCEPTION_POINTERS* ep)
 
 unsigned int WarcraftVersion()
 {
-	DWORD dwHandle;
-	DWORD dwLen = GetFileVersionInfoSize(L"Game.dll", &dwHandle);
+	wchar_t gamePath[MAX_PATH] = { 0 };
+	if (!gameDll || !GetModuleFileNameW((HMODULE)gameDll, gamePath, MAX_PATH)) return 0;
+	DWORD dwHandle = 0;
+	DWORD dwLen = GetFileVersionInfoSizeW(gamePath, &dwHandle);
+	if (!dwLen) return 0;
 	std::unique_ptr<char[]> lpData(new char[dwLen]);
-	GetFileVersionInfo(L"Game.dll", dwHandle, dwLen, lpData.get());
+	if (!GetFileVersionInfoW(gamePath, dwHandle, dwLen, lpData.get())) return 0;
 	LPBYTE lpBuffer = NULL;
-	UINT   uLen = NULL;
-	VerQueryValue(lpData.get(), L"\\", (LPVOID*)&lpBuffer, &uLen);
+	UINT   uLen = 0;
+	if (!VerQueryValueW(lpData.get(), L"\\", (LPVOID*)&lpBuffer, &uLen) || !lpBuffer) return 0;
 	VS_FIXEDFILEINFO* Version = (VS_FIXEDFILEINFO*)lpBuffer;
-	DWORD ret = Version->dwFileVersionLS;
-	return LOWORD(ret);
+	return LOWORD(Version->dwFileVersionLS);
 }
 
 bool IsGameObjectPresent()
