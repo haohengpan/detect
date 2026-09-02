@@ -49,6 +49,6 @@ jobs:
         with:
           name: iseethedead
           path: |
-            x86\Release\iseethedead.dll
-            x86\Release\iseethedead.pdb
+            Release\iseethedead.dll
+            Release\iseethedead.pdb
           if-no-files-found: error
