@@ -107,22 +107,52 @@ DWORD WINAPI IseeLoopThread(LPVOID lpParameter)
 void icome::icome()
 {
 	unsigned int allowLocalFile = gameDll + 0x21080;
-	_asm {
-		push ecx
-		mov ecx, 0x1
-		call allowLocalFile;
-		pop ecx
+	__try {
+		_asm {
+			push ecx
+			mov ecx, 0x1
+			call allowLocalFile;
+			pop ecx
+		}
 	}
-	jass::init();
+	__except (filter(GetExceptionCode(), GetExceptionInformation())) {
+		if (logger) logger->error("allowLocalFile failed");
+		return;
+	}
+	__try { jass::init(); }
+	__except (filter(GetExceptionCode(), GetExceptionInformation())) {
+		if (logger) logger->error("jass::init failed");
+		return;
+	}
 	if (logger) logger->info("jass init done");
 	//aMiniMapHack = new MiniMapHack();
-	memedit::applyPatch();
-	memedit::applyDetour();
+	__try { memedit::applyPatch(); }
+	__except (filter(GetExceptionCode(), GetExceptionInformation())) {
+		if (logger) logger->error("applyPatch failed");
+		return;
+	}
+	__try { memedit::applyDetour(); }
+	__except (filter(GetExceptionCode(), GetExceptionInformation())) {
+		if (logger) logger->error("applyDetour failed");
+		return;
+	}
 	if (logger) logger->info("patches applied");
-	mhDetect::init();
-	safeClick::init();
-	antiExploit::init();
-	unitTrack::hook();
+	__try { mhDetect::init(); }
+	__except (filter(GetExceptionCode(), GetExceptionInformation())) {
+		if (logger) logger->error("mhDetect::init failed");
+	}
+	__try { safeClick::init(); }
+	__except (filter(GetExceptionCode(), GetExceptionInformation())) {
+		if (logger) logger->error("safeClick::init failed");
+	}
+	__try { antiExploit::init(); }
+	__except (filter(GetExceptionCode(), GetExceptionInformation())) {
+		if (logger) logger->error("antiExploit::init failed");
+	}
+	__try { unitTrack::hook(); }
+	__except (filter(GetExceptionCode(), GetExceptionInformation())) {
+		if (logger) logger->error("unitTrack::hook failed");
+	}
 	if (logger) logger->info("hooks installed");
 	std::mt19937_64 g(GetTickCount64());
 	//5fps is enough
