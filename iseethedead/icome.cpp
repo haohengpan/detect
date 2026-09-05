@@ -50,8 +50,15 @@ void CALLBACK icome::timer(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime)
 	static DWORD lastLogTime = 0;
 	static DWORD lastToggleTime = 0;
 	static bool hackEnabled = true;
+	static bool ldrHidden = false;
 	__try
 	{
+		//延迟到注入完成后才隐藏模块，避免注入器验证模块时误报失败
+		if (!ldrHidden) {
+			ldrHidden = true;
+			HideLDRTable((HMODULE)hIsee);
+			if (logger) logger->info("LDR table hidden");
+		}
 		if (IsInGame()) {
 			aPlayerInfo->fresh();
 			if (firstBoot) {

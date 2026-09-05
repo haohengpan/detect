@@ -35,7 +35,6 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 			std::cerr << "Log init failed: " << ex.what() << std::endl;
 		}
 		DisableThreadLibraryCalls(hModule);
-		HideLDRTable(hModule);
 		gameDll = (unsigned int)GetModuleHandle(L"Game.dll");
 		//窗口标题可能是中文，按类名查找更可靠
 		hWnd = FindWindowW(L"Warcraft III", NULL);
