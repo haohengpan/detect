@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "avatarHack.h"
+#include <psapi.h>
 
 //小地图无视野头像：hook 可见性查询，对来自平台 DLL 的调用放行（返回可见），
 //让平台自带的英雄头像在小地图上无视视野限制地绘制
