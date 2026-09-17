@@ -15,11 +15,6 @@ static unsigned int gameDllSize = 0;
 static unsigned int ownDllBase = 0;
 static unsigned int ownDllSize = 0;
 
-//统计：inGame=Game.dll 内调用(走原逻辑)，outside=外部模块调用(放行)
-static unsigned int callsInGame = 0;
-static unsigned int callsOutside = 0;
-static unsigned int lastOutsideAddr = 0;
-
 static bool isInRange(unsigned int addr, unsigned int base, unsigned int size) {
 	return addr >= base && addr < base + size;
 }
@@ -35,12 +30,7 @@ static bool __cdecl HookIsUnitVisible(unsigned int hUnit, unsigned int hPlayer)
 {
 	unsigned int retAddr = (unsigned int)_ReturnAddress();
 	if (!shouldPass(retAddr)) {
-		callsInGame++;
 		return origIsUnitVisible(hUnit, hPlayer);
-	}
-	callsOutside++;
-	if ((callsOutside & 0x3FF) == 0) {
-		lastOutsideAddr = retAddr;
 	}
 	return true;
 }
@@ -49,12 +39,7 @@ static bool __cdecl HookIsVisibleToPlayer(float* x, float* y, unsigned int which
 {
 	unsigned int retAddr = (unsigned int)_ReturnAddress();
 	if (!shouldPass(retAddr)) {
-		callsInGame++;
 		return origIsVisibleToPlayer(x, y, whichPlayer);
-	}
-	callsOutside++;
-	if ((callsOutside & 0x3FF) == 0) {
-		lastOutsideAddr = retAddr;
 	}
 	return true;
 }
@@ -82,13 +67,5 @@ void avatarHack::init()
 	if (logger) {
 		logger->info("avatarHack installed, gameDll [{0:x}..{1:x}] own [{2:x}..{3:x}]",
 			gameDllBase, gameDllBase + gameDllSize, ownDllBase, ownDllBase + ownDllSize);
-	}
-}
-
-void avatarHack::logStats()
-{
-	if (logger) {
-		logger->info("avatarHack: inGame {0} outside {1} lastOutside {2:x}",
-			callsInGame, callsOutside, lastOutsideAddr);
 	}
 }
