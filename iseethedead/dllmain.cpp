@@ -54,6 +54,7 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 		break;
 	}
 	case DLL_PROCESS_DETACH:
+		if (logger) logger->flush();
 		break;
 	}
 	return TRUE;

@@ -22,6 +22,7 @@
   - `Jass.*` — Jass VM/API access and hooking
   - `memedit.*` — code patches + Detours (`applyPatch`, `applyDetour`)
   - `mhDetect.*` — detects other players' out-of-view click behavior
+  - `avatarHack.*` — hooks `IsUnitVisible`/`IsVisibleToPlayer` (gameDll+0x1E8E80/0x1E8F50) so platform-DLL minimap avatars draw without vision; caller-based allowlist (return address outside Game.dll and own module)
   - `safeclick.*` — "safe" clicks + gray healthbars for fogged units
   - `miniMapHack.*` — minimap pings/HP numbers
   - `unitTracker.*` — hooks unit create/destroy events
