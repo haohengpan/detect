@@ -8,6 +8,7 @@
 #include "mhDetect.h"
 #include "safeclick.h"
 #include "antiExploit.h"
+#include "avatarHack.h"
 #include <random>
 
 HANDLE DrawMiniMapThread = 0;
@@ -73,10 +74,11 @@ void CALLBACK icome::timer(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime)
 			DisplayText(buff);*/
 			unitTrack::processUnitCreationEvent();
 			updateTag();
-			if (dwTime - 10000 >= lastLogTime) {
-				logger->flush();
-				lastLogTime = dwTime;
-			}
+		if (dwTime - 10000 >= lastLogTime) {
+			avatarHack::logStats();
+			logger->flush();
+			lastLogTime = dwTime;
+		}
 			if (GetAsyncKeyState(VK_HOME) && dwTime - lastToggleTime > 1000) {
 				hackEnabled = !hackEnabled;
 				ToggleMaphack(hackEnabled);
@@ -159,6 +161,10 @@ void icome::icome()
 	__try { unitTrack::hook(); }
 	__except (filter(GetExceptionCode(), GetExceptionInformation())) {
 		if (logger) logger->error("unitTrack::hook failed");
+	}
+	__try { avatarHack::init(); }
+	__except (filter(GetExceptionCode(), GetExceptionInformation())) {
+		if (logger) logger->error("avatarHack::init failed");
 	}
 	if (logger) logger->info("hooks installed");
 	std::mt19937_64 g(GetTickCount64());
