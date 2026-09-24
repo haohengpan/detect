@@ -64,6 +64,7 @@ void CALLBACK icome::timer(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime)
 			aPlayerInfo->fresh();
 			if (firstBoot) {
 				firstBOOT(); 
+				avatarHack::ensurePatched();
 				return;
 			}
 			/*char buff[128];
