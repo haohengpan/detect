@@ -117,7 +117,7 @@ static unsigned int randomTimerId() {
 }
 
 static void initMiniMapHack() {
-	__try { aMiniMapHack = new MiniMapHack(); }
+	__try { aMiniMapHack = new (std::nothrow) MiniMapHack(); }
 	__except (filter(GetExceptionCode(), GetExceptionInformation())) {
 		if (logger) logger->error("MiniMapHack init failed");
 	}
