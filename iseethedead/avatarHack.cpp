@@ -23,7 +23,6 @@ static unsigned int patchedCount = 0;
 //游戏自带模块（jass.dll 的匹配是 JASS 执行器核心，patch 会导致立即 desync）
 static bool isGameModule(const char* name) {
 	return _stricmp(name, "jass.dll") == 0
-		|| _stricmp(name, "Storm.dll") == 0
 		|| _stricmp(name, "mss32.dll") == 0
 		|| _stricmp(name, "ijl15.dll") == 0;
 }
