@@ -20,44 +20,33 @@ static bool isInRange(unsigned int addr, unsigned int base, unsigned int size) {
 	return addr >= base && addr < base + size;
 }
 
-//判断 HookUnitVis 的调用者：平台 DLL(非 Game.dll 非自己) -> 返回 1，否则 0
-//[esp+4] = HookUnitVis 的返回地址（进入本函数时 esp+0 是本函数的返回地址）
-__declspec(naked) static void CheckCaller() {
+//vtable[0xFC] 的替换函数：__thiscall(this=单位对象, 3 个栈参数)。
+//调用者判断内联实现，注意保存恢复 ecx(this)，避免破坏原函数调用环境。
+__declspec(naked) static void HookUnitVis() {
 	_asm {
-		mov eax, [esp + 4]
+		push ecx						//保存 this
+		mov eax, [esp + 4]				//返回地址（push ecx 后偏移 +4）
 		cmp eax, gameDllBase
-		jb outside
+		jb  outside
 		mov ecx, gameDllBase
 		add ecx, gameDllSize
 		cmp eax, ecx
-		jb inside
+		jb  inside
 		mov ecx, ownDllBase
 		cmp eax, ecx
-		jb outside
+		jb  outside
 		mov ecx, ownDllBase
 		add ecx, ownDllSize
 		cmp eax, ecx
-		jb inside
+		jb  inside
 	outside:
-		mov eax, 1
-		ret
-	inside:
-		xor eax, eax
-		ret
-	}
-}
-
-//vtable[0xFC] 的替换函数：__thiscall(this=单位对象, 3 个栈参数)
-__declspec(naked) static void HookUnitVis() {
-	_asm {
-		call CheckCaller
-		test eax, eax
-		jz call_orig
 		inc dword ptr [outsideCalls]
+		pop ecx
 		mov eax, 1
 		ret 0xC
-	call_orig:
+	inside:
 		inc dword ptr [insideCalls]
+		pop ecx
 		jmp dword ptr [origUnitVisFn]
 	}
 }
