@@ -2,4 +2,5 @@
 
 namespace avatarHack {
 	void init();
+	void logStats();
 }
