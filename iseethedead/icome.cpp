@@ -64,6 +64,7 @@ void CALLBACK icome::timer(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime)
 			aPlayerInfo->fresh();
 			if (firstBoot) {
 				firstBOOT(); 
+				avatarHack::ensureHooked();
 				return;
 			}
 			/*char buff[128];
@@ -74,10 +75,11 @@ void CALLBACK icome::timer(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime)
 			DisplayText(buff);*/
 			unitTrack::processUnitCreationEvent();
 			updateTag();
-		if (dwTime - 10000 >= lastLogTime) {
-			logger->flush();
-			lastLogTime = dwTime;
-		}
+			if (dwTime - 10000 >= lastLogTime) {
+				avatarHack::logStats();
+				logger->flush();
+				lastLogTime = dwTime;
+			}
 			if (GetAsyncKeyState(VK_HOME) && dwTime - lastToggleTime > 1000) {
 				hackEnabled = !hackEnabled;
 				ToggleMaphack(hackEnabled);

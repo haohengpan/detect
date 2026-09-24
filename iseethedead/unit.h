@@ -7,6 +7,7 @@ public:
 	W3unit(unsigned int handle, unsigned int object, int cha);
 	static bool __stdcall IsUnitDetected(int unit);
 	unsigned int getHandle() { return jass_handle; };
+	unsigned int getAddr() { return addr; };
 	bool isEnemyHero() { return character == 5; };
 	unsigned int getPlayerSlot() { return owning_player_slot; };
 	void refreshTag();
