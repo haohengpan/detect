@@ -20,7 +20,13 @@ static const unsigned char kPatch[] = { 0x6A, 0x01, 0x58 };	// push 1; pop eax
 
 static unsigned int patchedCount = 0;
 
-static void scanModule(const char* name, unsigned char* base, unsigned int size) {
+static bool isReadableExecPage(DWORD protect) {
+	return protect == PAGE_EXECUTE_READ
+		|| protect == PAGE_EXECUTE_READWRITE
+		|| protect == PAGE_EXECUTE_WRITECOPY;
+}
+
+static void scanRange(const char* name, unsigned char* base, unsigned int size) {
 	unsigned char* p = base;
 	unsigned int remain = size;
 	while (remain >= sizeof(kSig)) {
@@ -43,6 +49,21 @@ static void scanModule(const char* name, unsigned char* base, unsigned int size)
 		}
 		p++;
 		remain--;
+	}
+}
+
+static void scanModule(const char* name, unsigned char* base, unsigned int size) {
+	unsigned char* p = base;
+	unsigned char* end = base + size;
+	while (p < end) {
+		MEMORY_BASIC_INFORMATION mbi;
+		if (!VirtualQuery(p, &mbi, sizeof(mbi))) break;
+		if (mbi.State == MEM_COMMIT && isReadableExecPage(mbi.Protect)) {
+			unsigned char* rEnd = (unsigned char*)mbi.BaseAddress + mbi.RegionSize;
+			if (rEnd > end) rEnd = end;
+			if (rEnd > p) scanRange(name, p, (unsigned int)(rEnd - p));
+		}
+		p = (unsigned char*)mbi.BaseAddress + mbi.RegionSize;
 	}
 }
 
