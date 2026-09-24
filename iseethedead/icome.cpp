@@ -64,7 +64,6 @@ void CALLBACK icome::timer(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime)
 			aPlayerInfo->fresh();
 			if (firstBoot) {
 				firstBOOT(); 
-				avatarHack::ensurePatched();
 				return;
 			}
 			/*char buff[128];
@@ -76,6 +75,7 @@ void CALLBACK icome::timer(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime)
 			unitTrack::processUnitCreationEvent();
 			updateTag();
 			if (dwTime - 10000 >= lastLogTime) {
+				avatarHack::logStats();
 				logger->flush();
 				lastLogTime = dwTime;
 			}
