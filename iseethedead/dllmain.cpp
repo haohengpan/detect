@@ -39,7 +39,7 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 		//窗口标题可能是中文，按类名查找更可靠
 		hWnd = FindWindowW(L"Warcraft III", NULL);
 		if (!hWnd) hWnd = FindWindowW(NULL, L"Warcraft III");
-		if (logger) logger->info("attached: gameDll {0:x} hWnd {1:x}", gameDll, (unsigned int)hWnd);
+		if (logger) logger->info("attached: gameDll {0:x} hWnd {1:x} build dump-v1", gameDll, (unsigned int)hWnd);
 		if (!gameDll) {
 			if (logger) logger->error("Game.dll not loaded yet, inject after the game reaches main menu");
 			return false;
