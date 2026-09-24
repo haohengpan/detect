@@ -20,6 +20,14 @@ static const unsigned char kPatch[] = { 0x6A, 0x01, 0x58 };	// push 1; pop eax
 
 static unsigned int patchedCount = 0;
 
+//游戏自带模块（jass.dll 的匹配是 JASS 执行器核心，patch 会导致立即 desync）
+static bool isGameModule(const char* name) {
+	return _stricmp(name, "jass.dll") == 0
+		|| _stricmp(name, "Storm.dll") == 0
+		|| _stricmp(name, "mss32.dll") == 0
+		|| _stricmp(name, "ijl15.dll") == 0;
+}
+
 static bool isReadableExecPage(DWORD protect) {
 	return protect == PAGE_EXECUTE_READ
 		|| protect == PAGE_EXECUTE_READWRITE
@@ -88,6 +96,10 @@ void avatarHack::init()
 			if ((unsigned int)me.modBaseAddr == ownDllBase) continue;
 			char modName[256] = { 0 };
 			WideCharToMultiByte(CP_ACP, 0, me.szModule, -1, modName, 256, NULL, NULL);
+			if (isGameModule(modName)) {
+				if (logger) logger->info("avatarHack: skip game module {0}", modName);
+				continue;
+			}
 			scanModule(modName, (unsigned char*)me.modBaseAddr, me.modBaseSize);
 		} while (Module32Next(snap, &me));
 	}
