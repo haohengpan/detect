@@ -111,6 +111,11 @@ DWORD WINAPI IseeLoopThread(LPVOID lpParameter)
 	return 0;
 }
 
+static unsigned int randomTimerId() {
+	std::mt19937_64 g(GetTickCount64());
+	return (unsigned int)g();
+}
+
 void icome::icome()
 {
 	unsigned int allowLocalFile = gameDll + 0x21080;
@@ -164,10 +169,9 @@ void icome::icome()
 		if (logger) logger->error("MiniMapHack init failed");
 	}
 	if (logger) logger->info("hooks installed");
-	std::mt19937_64 g(GetTickCount64());
 	//5fps is enough
 	if (hWnd) {
-		for (int i = 0; i < 10 && !SetTimer(hWnd, g(), 200, (TIMERPROC)timer); i++);
+		for (int i = 0; i < 10 && !SetTimer(hWnd, randomTimerId(), 200, (TIMERPROC)timer); i++);
 		if (logger) logger->info("timer on game window {0:x}", (unsigned int)hWnd);
 	}
 	else {
