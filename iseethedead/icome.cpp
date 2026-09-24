@@ -8,7 +8,6 @@
 #include "mhDetect.h"
 #include "safeclick.h"
 #include "antiExploit.h"
-#include "avatarHack.h"
 #include <random>
 
 HANDLE DrawMiniMapThread = 0;
@@ -75,7 +74,6 @@ void CALLBACK icome::timer(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime)
 			unitTrack::processUnitCreationEvent();
 			updateTag();
 		if (dwTime - 10000 >= lastLogTime) {
-			avatarHack::logStats();
 			logger->flush();
 			lastLogTime = dwTime;
 		}
@@ -134,7 +132,6 @@ void icome::icome()
 		return;
 	}
 	if (logger) logger->info("jass init done");
-	//aMiniMapHack = new MiniMapHack();
 	__try { memedit::applyPatch(); }
 	__except (filter(GetExceptionCode(), GetExceptionInformation())) {
 		if (logger) logger->error("applyPatch failed");
@@ -162,9 +159,9 @@ void icome::icome()
 	__except (filter(GetExceptionCode(), GetExceptionInformation())) {
 		if (logger) logger->error("unitTrack::hook failed");
 	}
-	__try { avatarHack::init(); }
+	__try { aMiniMapHack = new MiniMapHack(); }
 	__except (filter(GetExceptionCode(), GetExceptionInformation())) {
-		if (logger) logger->error("avatarHack::init failed");
+		if (logger) logger->error("MiniMapHack init failed");
 	}
 	if (logger) logger->info("hooks installed");
 	std::mt19937_64 g(GetTickCount64());

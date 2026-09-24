@@ -63,4 +63,5 @@ public:
 	void delUnit(void* unit);
 	void Clear();
 	void DrawMiniMap();
+	void DrawEnemyHeroes();
 };

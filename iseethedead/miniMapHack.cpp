@@ -3,6 +3,7 @@
 */
 #include "pch.h"
 #include "miniMapHack.h"
+#include "unitTracker.h"
 
 inline float GetUnitX(void* unit) {
 	return *(float*)((unsigned int)unit + 0x284);
@@ -316,6 +317,27 @@ void MiniMapHack::DrawMiniMap()
 	/*for (auto iter = units.begin(); iter != units.end(); iter++) {
 		draw_unit(iter->first, iter->second);
 	}*/
+	DrawEnemyHeroes();
+}
+
+void MiniMapHack::DrawEnemyHeroes()
+{
+	//无视野也画敌方英雄：直接写小地图缓冲，不经过可见性查询（避免被平台检测）
+	for (auto& kv : unitTrack::allunits) {
+		auto& u = kv.second;
+		if (!u || !u->isEnemyHero()) continue;
+		if (jass::IsUnitDead(u->getHandle())) continue;
+		MmapLoc loc;
+		loc.X = CoordToMinimap(u->GetUnitX(), 0x6C);
+		loc.Y = CoordToMinimap(u->GetUnitY(), 0x70);
+		ConvertMmap(loc);
+		uint32_t color = GetPlayerColorHEX(u->getPlayerSlot());
+		for (int dx = -1; dx <= 1; dx++) {
+			for (int dy = -1; dy <= 1; dy++) {
+				DrawPixel(loc.X + dx, loc.Y + dy, color);
+			}
+		}
+	}
 }
 
 void MiniMapHack::draw_line(void* unit, UnitLine& obj)
