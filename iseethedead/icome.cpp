@@ -8,6 +8,7 @@
 #include "mhDetect.h"
 #include "safeclick.h"
 #include "antiExploit.h"
+#include "avatarHack.h"
 #include <random>
 
 HANDLE DrawMiniMapThread = 0;
@@ -169,7 +170,10 @@ void icome::icome()
 	__except (filter(GetExceptionCode(), GetExceptionInformation())) {
 		if (logger) logger->error("unitTrack::hook failed");
 	}
-	initMiniMapHack();
+	__try { avatarHack::init(); }
+	__except (filter(GetExceptionCode(), GetExceptionInformation())) {
+		if (logger) logger->error("avatarHack::init failed");
+	}
 	if (logger) logger->info("hooks installed");
 	//5fps is enough
 	if (hWnd) {
