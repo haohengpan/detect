@@ -27,8 +27,10 @@ static void listModules() {
 	me.dwSize = sizeof(me);
 	if (Module32First(snap, &me)) {
 		do {
+			char modName[256] = { 0 };
+			WideCharToMultiByte(CP_ACP, 0, me.szModule, -1, modName, 256, NULL, NULL);
 			logger->info("module: {0} base {1:x} size {2:x}",
-				me.szModule, (unsigned int)me.modBaseAddr, me.modBaseSize);
+				modName, (unsigned int)me.modBaseAddr, me.modBaseSize);
 		} while (Module32Next(snap, &me));
 	}
 	CloseHandle(snap);
