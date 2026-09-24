@@ -3,96 +3,80 @@
 #include <tlhelp32.h>
 #include <psapi.h>
 
-//归属调查版 v3（仅单机使用）：hook IsUnitVisible 入口，记录外部调用者地址，
-//并对每个新调用者输出 VirtualQuery 信息（AllocationBase/State/Protect/Type）
-//以及完整模块列表，用于确定平台头像查询代码的归属。
-typedef bool(__cdecl* pIsUnitVisibleFn)(unsigned int hUnit, unsigned int hPlayer);
-static pIsUnitVisibleFn origIsUnitVisible = NULL;
+//小地图无视野头像（最终方案）：平台进图后把自己的头像绘制代码注入到 jass.dll
+//（偏移 0x1F7351 附近），其中的可见性查询  call [ebp+8] 改为 push 1; pop eax。
+//jass.dll 内偏移 0x1F6354 是暴雪 JASS VM 核心的 native 调用点，patch 会导致立即
+//desync，必须跳过。Game.dll 完全不动。
+//调查数据：caller=jass.dll+0x1F7357(返回地址)，即 call 指令在 +0x1F7354。
+static const unsigned char kSig[] = {
+	0x83, 0xC4, 0x0C,	// add esp, 0xC（上一次调用的清理）
+	0xFF, 0x55, 0x08,	// call [ebp+8]（可见性查询）
+	0x8B, 0x65, 0x10,	// mov esp, [ebp+10]
+	0x03, 0x65, 0xFC,	// add esp, [ebp-4]
+	0x89, 0x45			// mov [ebp+xx], eax（保存返回值）
+};
+static const unsigned char kPatch[] = { 0x6A, 0x01, 0x58 };	// push 1; pop eax
 
-static unsigned int gameDllBase = 0, gameDllSize = 0;
-static unsigned int ownDllBase = 0, ownDllSize = 0;
+//暴雪 JASS VM 核心 native 调用点，绝不能 patch
+static const unsigned int kSkipOffset = 0x1F6354;
 
-#define MAX_CALLERS 32
-static unsigned int callers[MAX_CALLERS] = { 0 };
-static unsigned int counts[MAX_CALLERS] = { 0 };
-
-static bool inRange(unsigned int addr, unsigned int base, unsigned int size) {
-	return addr >= base && addr < base + size;
-}
-
-static void listModules() {
-	if (!logger) return;
-	HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, GetCurrentProcessId());
-	if (snap == INVALID_HANDLE_VALUE) return;
-	MODULEENTRY32 me;
-	me.dwSize = sizeof(me);
-	if (Module32First(snap, &me)) {
-		do {
-			char modName[256] = { 0 };
-			WideCharToMultiByte(CP_ACP, 0, me.szModule, -1, modName, 256, NULL, NULL);
-			logger->info("module: {0} base {1:x} size {2:x}", modName, (unsigned int)me.modBaseAddr, me.modBaseSize);
-		} while (Module32Next(snap, &me));
-	}
-	CloseHandle(snap);
-}
-
-static void recordCaller(unsigned int ret) {
-	for (unsigned int i = 0; i < MAX_CALLERS; i++) {
-		if (callers[i] == ret) {
-			counts[i]++;
-			return;
-		}
-		if (callers[i] == 0) {
-			callers[i] = ret;
-			counts[i] = 1;
-			MEMORY_BASIC_INFORMATION mbi;
-			if (VirtualQuery((void*)ret, &mbi, sizeof(mbi)) && logger) {
-				logger->info("avatarHack caller {0:x} allocBase {1:x} state {2:x} protect {3:x} type {4:x}",
-					ret, (unsigned int)mbi.AllocationBase, mbi.State, mbi.Protect, mbi.Type);
-			}
-			return;
-		}
-	}
-}
-
-static bool __cdecl HookIsUnitVisible(unsigned int hUnit, unsigned int hPlayer)
-{
-	unsigned int ret = (unsigned int)_ReturnAddress();
-	if (!inRange(ret, gameDllBase, gameDllSize) && !inRange(ret, ownDllBase, ownDllSize)) {
-		recordCaller(ret);
-	}
-	return origIsUnitVisible(hUnit, hPlayer);
-}
+static unsigned int jassDllBase = 0;
+static unsigned int jassDllSize = 0;
+static bool done = false;
+static unsigned int patchedCount = 0;
 
 void avatarHack::init()
 {
-	MODULEINFO mi;
-	if (GetModuleInformation(GetCurrentProcess(), (HMODULE)gameDll, &mi, sizeof(mi))) {
-		gameDllBase = (unsigned int)mi.lpBaseOfDll;
-		gameDllSize = mi.SizeOfImage;
+	HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, GetCurrentProcessId());
+	if (snap != INVALID_HANDLE_VALUE) {
+		MODULEENTRY32 me;
+		me.dwSize = sizeof(me);
+		if (Module32First(snap, &me)) {
+			do {
+				char modName[256] = { 0 };
+				WideCharToMultiByte(CP_ACP, 0, me.szModule, -1, modName, 256, NULL, NULL);
+				if (_stricmp(modName, "jass.dll") == 0) {
+					jassDllBase = (unsigned int)me.modBaseAddr;
+					jassDllSize = me.modBaseSize;
+				}
+			} while (Module32Next(snap, &me));
+		}
+		CloseHandle(snap);
 	}
-	if (GetModuleInformation(GetCurrentProcess(), (HMODULE)hIsee, &mi, sizeof(mi))) {
-		ownDllBase = (unsigned int)mi.lpBaseOfDll;
-		ownDllSize = mi.SizeOfImage;
-	}
-	listModules();
-	origIsUnitVisible = (pIsUnitVisibleFn)(gameDll + 0x1E8E80);
-	int error = DetourTransactionBegin();
-	if (error == NO_ERROR) {
-		DetourUpdateThread(GetCurrentThread());
-		DetourAttach(&(PVOID&)origIsUnitVisible, HookIsUnitVisible);
-		DetourTransactionCommit();
-	}
-	if (logger) {
-		logger->info("avatarHack probe v3 installed, gameDll [{0:x}..{1:x}] own [{2:x}..{3:x}]",
-			gameDllBase, gameDllBase + gameDllSize, ownDllBase, ownDllBase + ownDllSize);
-	}
+	if (logger) logger->info("avatarHack ready, jass [{0:x}..{1:x}]", jassDllBase, jassDllBase + jassDllSize);
 }
 
-void avatarHack::logStats()
+void avatarHack::ensurePatched()
 {
-	if (!logger) return;
-	for (unsigned int i = 0; i < MAX_CALLERS && callers[i] != 0; i++) {
-		logger->info("avatarHack caller: {0:x} count {1}", callers[i], counts[i]);
+	if (done) return;
+	if (!jassDllBase) return;
+	unsigned char* base = (unsigned char*)jassDllBase;
+	unsigned char* end = base + jassDllSize;
+	unsigned char* p = base;
+	//平台进图后才注入头像代码，扫不到时由下次 tick 重试
+	while (p + sizeof(kSig) <= end) {
+		unsigned int remain = (unsigned int)(end - p);
+		p = (unsigned char*)memchr(p, kSig[0], remain);
+		if (!p) break;
+		if ((unsigned int)(end - p) < sizeof(kSig)) break;
+		if (memcmp(p, kSig, sizeof(kSig)) == 0) {
+			unsigned int off = (unsigned int)(p - base);
+			if (off != kSkipOffset) {
+				unsigned char* callSite = p + 3;
+				if (callSite[0] == 0xFF && callSite[1] == 0x55 && callSite[2] == 0x08) {
+					DWORD oldProt = 0;
+					if (VirtualProtect(callSite, 3, PAGE_EXECUTE_READWRITE, &oldProt)) {
+						callSite[0] = kPatch[0];
+						callSite[1] = kPatch[1];
+						callSite[2] = kPatch[2];
+						VirtualProtect(callSite, 3, oldProt, &oldProt);
+						patchedCount++;
+						done = true;
+						if (logger) logger->info("avatarHack: patched jass.dll+{0:x} ({1:x})", off + 3, (unsigned int)callSite);
+					}
+				}
+			}
+		}
+		p++;
 	}
 }
