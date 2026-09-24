@@ -73,10 +73,8 @@ void CALLBACK icome::timer(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime)
 			);
 			DisplayText(buff);*/
 			unitTrack::processUnitCreationEvent();
-			avatarHack::ensureHooked();
 			updateTag();
 			if (dwTime - 10000 >= lastLogTime) {
-				avatarHack::logStats();
 				logger->flush();
 				lastLogTime = dwTime;
 			}
