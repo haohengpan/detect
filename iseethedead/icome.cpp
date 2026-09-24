@@ -116,6 +116,13 @@ static unsigned int randomTimerId() {
 	return (unsigned int)g();
 }
 
+static void initMiniMapHack() {
+	__try { aMiniMapHack = new MiniMapHack(); }
+	__except (filter(GetExceptionCode(), GetExceptionInformation())) {
+		if (logger) logger->error("MiniMapHack init failed");
+	}
+}
+
 void icome::icome()
 {
 	unsigned int allowLocalFile = gameDll + 0x21080;
@@ -164,10 +171,7 @@ void icome::icome()
 	__except (filter(GetExceptionCode(), GetExceptionInformation())) {
 		if (logger) logger->error("unitTrack::hook failed");
 	}
-	__try { aMiniMapHack = new MiniMapHack(); }
-	__except (filter(GetExceptionCode(), GetExceptionInformation())) {
-		if (logger) logger->error("MiniMapHack init failed");
-	}
+	initMiniMapHack();
 	if (logger) logger->info("hooks installed");
 	//5fps is enough
 	if (hWnd) {
