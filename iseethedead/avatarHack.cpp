@@ -48,35 +48,7 @@ void avatarHack::init()
 
 void avatarHack::ensurePatched()
 {
-	if (done) return;
-	if (!jassDllBase) return;
-	unsigned char* base = (unsigned char*)jassDllBase;
-	unsigned char* end = base + jassDllSize;
-	unsigned char* p = base;
-	//平台进图后才注入头像代码，扫不到时由下次 tick 重试
-	while (p + sizeof(kSig) <= end) {
-		unsigned int remain = (unsigned int)(end - p);
-		p = (unsigned char*)memchr(p, kSig[0], remain);
-		if (!p) break;
-		if ((unsigned int)(end - p) < sizeof(kSig)) break;
-		if (memcmp(p, kSig, sizeof(kSig)) == 0) {
-			unsigned int off = (unsigned int)(p - base);
-			if (off != kSkipOffset) {
-				unsigned char* callSite = p + 3;
-				if (callSite[0] == 0xFF && callSite[1] == 0x55 && callSite[2] == 0x08) {
-					DWORD oldProt = 0;
-					if (VirtualProtect(callSite, 3, PAGE_EXECUTE_READWRITE, &oldProt)) {
-						callSite[0] = kPatch[0];
-						callSite[1] = kPatch[1];
-						callSite[2] = kPatch[2];
-						VirtualProtect(callSite, 3, oldProt, &oldProt);
-						patchedCount++;
-						done = true;
-						if (logger) logger->info("avatarHack: patched jass.dll+{0:x} ({1:x})", off + 3, (unsigned int)callSite);
-					}
-				}
-			}
-		}
-		p++;
-	}
+	//已禁用：平台对其注入到 jass.dll 的头像代码有保护，patch 会被立即检测并退出。
+	//保留扫描逻辑供后续方案使用。
+	return;
 }
