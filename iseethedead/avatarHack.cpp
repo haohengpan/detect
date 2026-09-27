@@ -1,54 +1,35 @@
 #include "pch.h"
 #include "avatarHack.h"
-#include <tlhelp32.h>
-#include <psapi.h>
 
-//小地图无视野头像（最终方案）：平台进图后把自己的头像绘制代码注入到 jass.dll
-//（偏移 0x1F7351 附近），其中的可见性查询  call [ebp+8] 改为 push 1; pop eax。
-//jass.dll 内偏移 0x1F6354 是暴雪 JASS VM 核心的 native 调用点，patch 会导致立即
-//desync，必须跳过。Game.dll 完全不动。
-//调查数据：caller=jass.dll+0x1F7357(返回地址)，即 call 指令在 +0x1F7354。
-static const unsigned char kSig[] = {
-	0x83, 0xC4, 0x0C,	// add esp, 0xC（上一次调用的清理）
-	0xFF, 0x55, 0x08,	// call [ebp+8]（可见性查询）
-	0x8B, 0x65, 0x10,	// mov esp, [ebp+10]
-	0x03, 0x65, 0xFC,	// add esp, [ebp-4]
-	0x89, 0x45			// mov [ebp+xx], eax（保存返回值）
-};
-static const unsigned char kPatch[] = { 0x6A, 0x01, 0x58 };	// push 1; pop eax
-
-//暴雪 JASS VM 核心 native 调用点，绝不能 patch
-static const unsigned int kSkipOffset = 0x1F6354;
-
-static unsigned int jassDllBase = 0;
-static unsigned int jassDllSize = 0;
-static bool done = false;
-static unsigned int patchedCount = 0;
+//小地图英雄头像（自绘方向，调查版）：dump 小地图绘制函数及其附近可见性判定的
+//机器码，用于分析"原版英雄图标绘制"的视野判定位置（0x3BDC35 special icon for
+//heroes 附近）。只读不写，联机安全。
+static void dumpBytes(const char* name, unsigned int addr, unsigned int len) {
+	if (!logger) return;
+	unsigned char* p = (unsigned char*)addr;
+	char buff[512];
+	int n = sprintf_s(buff, 512, "%s @%08x:", name, addr);
+	for (unsigned int i = 0; i < len; i++) {
+		n += sprintf_s(buff + n, 512 - n, " %02x", p[i]);
+		if (i % 16 == 15 || i == len - 1) {
+			logger->info("{0}", buff);
+			buff[0] = 0;
+			n = 0;
+		}
+	}
+}
 
 void avatarHack::init()
 {
-	HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, GetCurrentProcessId());
-	if (snap != INVALID_HANDLE_VALUE) {
-		MODULEENTRY32 me;
-		me.dwSize = sizeof(me);
-		if (Module32First(snap, &me)) {
-			do {
-				char modName[256] = { 0 };
-				WideCharToMultiByte(CP_ACP, 0, me.szModule, -1, modName, 256, NULL, NULL);
-				if (_stricmp(modName, "jass.dll") == 0) {
-					jassDllBase = (unsigned int)me.modBaseAddr;
-					jassDllSize = me.modBaseSize;
-				}
-			} while (Module32Next(snap, &me));
-		}
-		CloseHandle(snap);
-	}
-	if (logger) logger->info("avatarHack ready, jass [{0:x}..{1:x}]", jassDllBase, jassDllBase + jassDllSize);
+	//小地图绘制函数（注释: draw mini map at 3BA960）
+	dumpBytes("drawMinimap", gameDll + 0x3BA960, 256);
+	//全图补丁 0x3BD7E5（小地图可见性）附近
+	dumpBytes("minimapVis1", gameDll + 0x3BD5E0, 144);
+	//英雄特殊图标 0x3BDC35 附近
+	dumpBytes("minimapVis2", gameDll + 0x3BDBE0, 144);
+	logger->flush();
 }
 
 void avatarHack::ensurePatched()
 {
-	//已禁用：平台对其注入到 jass.dll 的头像代码有保护，patch 会被立即检测并退出。
-	//保留扫描逻辑供后续方案使用。
-	return;
 }
