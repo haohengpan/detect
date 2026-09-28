@@ -1,10 +1,10 @@
 #include "pch.h"
 #include "avatarHack.h"
 
-//调查版：为"自绘真实英雄头像"收集绘制管线的关键函数机器码。
-//  0x66C8F1：主循环中的单位图标判定（ecx=单位对象，返回 bool）
-//  0x3BD0FB：坐标获取（ecx=单位对象）
-//  0x66CB1B：小地图图标绘制（ecx=单位对象，push 1）
+//调查版第二轮：dump 更大范围覆盖三个函数的真实入口。
+//  0x66C8E0 起 256 字节（图标 setter 完整函数，入口约 0x66C8F0）
+//  0x66CB00 起 192 字节（小地图图标绘制对象初始化，入口约 0x66CB10）
+//  0x3BD0E0 起 160 字节（坐标获取，入口约 0x3BD0F0）
 static void dumpBytes(const char* name, unsigned int addr, unsigned int len) {
 	if (!logger) return;
 	unsigned char* p = (unsigned char*)addr;
@@ -22,9 +22,9 @@ static void dumpBytes(const char* name, unsigned int addr, unsigned int len) {
 
 void avatarHack::init()
 {
-	dumpBytes("iconCheck", gameDll + 0x66C8F1, 128);
-	dumpBytes("coordFn", gameDll + 0x3BD0FB, 128);
-	dumpBytes("iconDraw", gameDll + 0x66CB1B, 160);
+	dumpBytes("setter", gameDll + 0x66C8E0, 256);
+	dumpBytes("drawInit", gameDll + 0x66CB00, 192);
+	dumpBytes("coordFn2", gameDll + 0x3BD0E0, 160);
 	logger->flush();
 }
 
