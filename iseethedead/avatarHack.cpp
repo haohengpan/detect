@@ -17,6 +17,12 @@ static unsigned int calls = 0;
 static unsigned int clears = 0;
 static unsigned int intercepted = 0;
 
+//诊断：记录清除调用者的 this 样本及其字段，识别 this 与单位对象的关系
+static unsigned int samples[32] = { 0 };
+static unsigned int sampleCount = 0;
+static unsigned int sampleF30[32] = { 0 };
+static unsigned int sampleF38[32] = { 0 };
+
 static bool isHeroObj(unsigned int obj) {
 	for (unsigned int i = 0; i < heroCount && i < 16; i++) {
 		if (heroObjs[i] == obj) return true;
@@ -29,6 +35,16 @@ static void __fastcall HookSetter(unsigned int thisptr, unsigned int unusedEdx, 
 	calls++;
 	if (p18 == 0) {
 		clears++;
+		bool known = false;
+		for (unsigned int i = 0; i < sampleCount && i < 32; i++) {
+			if (samples[i] == thisptr) { known = true; break; }
+		}
+		if (!known && sampleCount < 32) {
+			samples[sampleCount] = thisptr;
+			sampleF30[sampleCount] = *(unsigned int*)(thisptr + 0x30);
+			sampleF38[sampleCount] = *(unsigned int*)(thisptr + 0x38);
+			sampleCount++;
+		}
 		if (isHeroObj(thisptr)) {
 			intercepted++;
 			return;	//拦截清除：保留头像图标（引用计数不递减，析构时自然平衡）
@@ -63,8 +79,14 @@ void avatarHack::ensurePatched()
 
 void avatarHack::logStats()
 {
-	if (logger) {
-		logger->info("avatarHack setter: calls {0} clears {1} intercepted {2}",
-			calls, clears, intercepted);
+	if (!logger) return;
+	logger->info("avatarHack setter: calls {0} clears {1} intercepted {2} samples {3}",
+		calls, clears, intercepted, sampleCount);
+	for (unsigned int i = 0; i < sampleCount && i < 32; i++) {
+		logger->info("avatarHack sample: this {0:x} f30 {1:x} f38 {2:x}",
+			samples[i], sampleF30[i], sampleF38[i]);
+	}
+	for (unsigned int i = 0; i < heroCount && i < 16; i++) {
+		logger->info("avatarHack heroObj: {0:x}", heroObjs[i]);
 	}
 }
