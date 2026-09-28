@@ -49,7 +49,6 @@ static unsigned int ownDllSize = 0;
 static unsigned int jassDllBase = 0;
 static unsigned int jassDllSize = 0;
 static bool patched = false;
-static bool onlineLogged = false;
 
 static bool inRange(unsigned int addr, unsigned int base, unsigned int size) {
 	return addr >= base && addr < base + size;
