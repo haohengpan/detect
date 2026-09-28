@@ -1,31 +1,37 @@
 #include "pch.h"
 #include "avatarHack.h"
 
-//调查版第二轮：dump 更大范围覆盖三个函数的真实入口。
-//  0x66C8E0 起 256 字节（图标 setter 完整函数，入口约 0x66C8F0）
-//  0x66CB00 起 192 字节（小地图图标绘制对象初始化，入口约 0x66CB10）
-//  0x3BD0E0 起 160 字节（坐标获取，入口约 0x3BD0F0）
-static void dumpBytes(const char* name, unsigned int addr, unsigned int len) {
-	if (!logger) return;
-	unsigned char* p = (unsigned char*)addr;
-	char buff[512];
-	int n = sprintf_s(buff, 512, "%s @%08x:", name, addr);
-	for (unsigned int i = 0; i < len; i++) {
-		n += sprintf_s(buff + n, 512 - n, " %02x", p[i]);
-		if (i % 16 == 15 || i == len - 1) {
-			logger->info("{0}", buff);
-			buff[0] = 0;
-			n = 0;
-		}
-	}
+//观察版：hook 单位图标 setter（Game.dll+0x66C8F0，渲染区 0x66xxxx）。
+//平台"无视野不显示头像"即靠该 setter 清除单位图标（[esi+0x48]=null）。
+//先记录平台的设置/清除行为，验证 hook 地址与调用时机，下一步实现
+//"敌方英雄进雾时保留图标"（不碰可见性判定、不改平台代码）。
+typedef void(__thiscall* pSetter)(unsigned int thisptr, int a, int b, int c, int d, int e);
+static pSetter origSetter = NULL;
+
+static unsigned int setterCalls = 0;
+static unsigned int lastEsi = 0;
+static unsigned int lastE = 0;
+static unsigned int lastCaller = 0;
+
+static void __thiscall HookSetter(unsigned int thisptr, int a, int b, int c, int d, int e)
+{
+	setterCalls++;
+	lastEsi = thisptr;
+	lastE = (unsigned int)e;
+	lastCaller = (unsigned int)_ReturnAddress();
+	origSetter(thisptr, a, b, c, d, e);
 }
 
 void avatarHack::init()
 {
-	dumpBytes("setter", gameDll + 0x66C8E0, 256);
-	dumpBytes("drawInit", gameDll + 0x66CB00, 192);
-	dumpBytes("coordFn2", gameDll + 0x3BD0E0, 160);
-	logger->flush();
+	origSetter = (pSetter)(gameDll + 0x66C8F0);
+	int error = DetourTransactionBegin();
+	if (error == NO_ERROR) {
+		DetourUpdateThread(GetCurrentThread());
+		DetourAttach(&(PVOID&)origSetter, HookSetter);
+		DetourTransactionCommit();
+	}
+	if (logger) logger->info("avatarHack: setter hook installed at {0:x}", gameDll + 0x66C8F0);
 }
 
 void avatarHack::ensurePatched()
@@ -34,4 +40,8 @@ void avatarHack::ensurePatched()
 
 void avatarHack::logStats()
 {
+	if (logger) {
+		logger->info("avatarHack setter: calls {0} esi {1:x} e {2:x} caller {3:x}",
+			setterCalls, lastEsi, lastE, lastCaller);
+	}
 }
