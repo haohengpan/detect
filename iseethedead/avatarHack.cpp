@@ -1,36 +1,59 @@
 #include "pch.h"
 #include "avatarHack.h"
 #include <tlhelp32.h>
+#include <psapi.h>
 
-//调查：平台进图后注入 jass.dll 的头像查询代码通过 call [ebp+8] 间接调用
-//IsUnitVisible。dump 该代码上下文，找 push 指令来源（平台函数表，数据段），
-//下一版改表指针（数据）而不是改代码。
-static const unsigned char kSig[] = {
-	0x83, 0xC4, 0x0C, 0xFF, 0x55, 0x08, 0x8B, 0x65, 0x10, 0x03, 0x65, 0xFC, 0x89, 0x45
-};
-static const unsigned int kSkipOffset = 0x1F6354;	// 暴雪 JASS VM 核心
+//小地图无视野头像（数据方案）：平台进图后通过函数指针间接调用 IsUnitVisible。
+//扫描进程可写内存，找到存有 IsUnitVisible 地址（gameDll+0x1E8E80）的 4 字节
+//指针（平台函数表条目），改为指向我们的 stub（恒返回可见）。
+//只改数据、不改任何代码，平台代码校验抓不到。跳过 Game.dll（native 表）、
+//自身、jass.dll（JASS native 表，改它会导致脚本查询全 true 而 desync）。
+static bool __cdecl StubUnitVisible(unsigned int a, unsigned int b)
+{
+	return true;
+}
 
+static unsigned int targetAddr = 0;
+static unsigned int gameDllBase = 0;
+static unsigned int gameDllSize = 0;
+static unsigned int ownDllBase = 0;
+static unsigned int ownDllSize = 0;
 static unsigned int jassDllBase = 0;
 static unsigned int jassDllSize = 0;
-static bool dumped = false;
+static bool patched = false;
 
-static void dumpBytes(const char* name, unsigned int addr, unsigned int len) {
-	if (!logger) return;
-	unsigned char* p = (unsigned char*)addr;
-	char buff[512];
-	int n = sprintf_s(buff, 512, "%s @%08x:", name, addr);
-	for (unsigned int i = 0; i < len; i++) {
-		n += sprintf_s(buff + n, 512 - n, " %02x", p[i]);
-		if (i % 16 == 15 || i == len - 1) {
-			logger->info("{0}", buff);
-			buff[0] = 0;
-			n = 0;
-		}
+static bool inRange(unsigned int addr, unsigned int base, unsigned int size) {
+	return addr >= base && addr < base + size;
+}
+
+static bool isWritable(DWORD protect) {
+	return protect == PAGE_READWRITE
+		|| protect == PAGE_EXECUTE_READWRITE
+		|| protect == PAGE_WRITECOPY
+		|| protect == PAGE_EXECUTE_WRITECOPY;
+}
+
+static void patchPointer(unsigned int addr) {
+	DWORD oldProt = 0;
+	if (VirtualProtect((void*)addr, 4, PAGE_READWRITE, &oldProt)) {
+		*(unsigned int*)addr = (unsigned int)StubUnitVisible;
+		VirtualProtect((void*)addr, 4, oldProt, &oldProt);
+		if (logger) logger->info("avatarHack: ptr patched at {0:x} -> {1:x}", addr, (unsigned int)StubUnitVisible);
 	}
 }
 
 void avatarHack::init()
 {
+	targetAddr = gameDll + 0x1E8E80;
+	MODULEINFO mi;
+	if (GetModuleInformation(GetCurrentProcess(), (HMODULE)gameDll, &mi, sizeof(mi))) {
+		gameDllBase = (unsigned int)mi.lpBaseOfDll;
+		gameDllSize = mi.SizeOfImage;
+	}
+	if (GetModuleInformation(GetCurrentProcess(), (HMODULE)hIsee, &mi, sizeof(mi))) {
+		ownDllBase = (unsigned int)mi.lpBaseOfDll;
+		ownDllSize = mi.SizeOfImage;
+	}
 	HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, GetCurrentProcessId());
 	if (snap != INVALID_HANDLE_VALUE) {
 		MODULEENTRY32 me;
@@ -47,38 +70,41 @@ void avatarHack::init()
 		}
 		CloseHandle(snap);
 	}
-	if (logger) logger->info("avatarHack ready, jass [{0:x}..{1:x}]", jassDllBase, jassDllBase + jassDllSize);
+	if (logger) logger->info("avatarHack ready, target {0:x}", targetAddr);
 }
 
 void avatarHack::ensurePatched()
 {
-	if (dumped) return;
-	if (!jassDllBase) return;
-	unsigned char* base = (unsigned char*)jassDllBase;
-	unsigned char* end = base + jassDllSize;
-	unsigned char* p = base;
-	unsigned char* found = nullptr;
-	while (p + sizeof(kSig) <= end) {
-		unsigned int remain = (unsigned int)(end - p);
-		p = (unsigned char*)memchr(p, kSig[0], remain);
-		if (!p) break;
-		if ((unsigned int)(end - p) < sizeof(kSig)) break;
-		if (memcmp(p, kSig, sizeof(kSig)) == 0) {
-			unsigned int off = (unsigned int)(p - base);
-			if (off != kSkipOffset) {
-				found = p;
-				break;
+	if (patched) return;
+	if (!targetAddr) return;
+	unsigned char* addr = (unsigned char*)0x10000;
+	unsigned char* maxAddr = (unsigned char*)0x7FFE0000;
+	unsigned int count = 0;
+	while (addr < maxAddr) {
+		MEMORY_BASIC_INFORMATION mbi;
+		if (!VirtualQuery(addr, &mbi, sizeof(mbi))) break;
+		unsigned int rb = (unsigned int)mbi.BaseAddress;
+		bool skip = inRange(rb, gameDllBase, gameDllSize)
+			|| inRange(rb, ownDllBase, ownDllSize)
+			|| (jassDllBase != 0 && inRange(rb, jassDllBase, jassDllSize));
+		if (!skip && mbi.State == MEM_COMMIT && isWritable(mbi.Protect)) {
+			unsigned char* p = (unsigned char*)mbi.BaseAddress;
+			unsigned char* end = p + mbi.RegionSize;
+			for (; p + 4 <= end; p += 4) {
+				if (*(unsigned int*)p == targetAddr) {
+					patchPointer((unsigned int)p);
+					count++;
+					if (count >= 8) break;
+				}
 			}
 		}
-		p++;
+		if (count >= 8) break;
+		addr = (unsigned char*)mbi.BaseAddress + mbi.RegionSize;
 	}
-	if (!found) return;	//平台代码尚未注入，下次 tick 重试
-	dumped = true;
-	unsigned int ctx = (unsigned int)found;
-	//签名前 128 字节（找 push 函数表指针的来源）+ 签名后 128 字节
-	dumpBytes("platformCtx1", ctx - 128, 128);
-	dumpBytes("platformCtx2", ctx, 128);
-	logger->flush();
+	if (count > 0) {
+		patched = true;
+		if (logger) logger->info("avatarHack: patched {0} pointer(s)", count);
+	}
 }
 
 void avatarHack::logStats()
