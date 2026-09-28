@@ -323,6 +323,7 @@ void MiniMapHack::DrawMiniMap()
 void MiniMapHack::DrawEnemyHeroes()
 {
 	//无视野也画敌方英雄：直接写小地图缓冲，不经过可见性查询（避免被平台检测）
+	//玩家颜色 3x3 色块 + 白色描边，在小地图上醒目区分英雄与其他单位
 	for (auto& kv : unitTrack::allunits) {
 		auto& u = kv.second;
 		if (!u || !u->isEnemyHero()) continue;
@@ -332,6 +333,14 @@ void MiniMapHack::DrawEnemyHeroes()
 		loc.Y = CoordToMinimap(u->GetUnitY(), 0x70);
 		ConvertMmap(loc);
 		uint32_t color = GetPlayerColorHEX(u->getPlayerSlot());
+		//外圈白色描边（5x5 边框）
+		for (int d = -2; d <= 2; d++) {
+			DrawPixel(loc.X + d, loc.Y - 2, 0xffffffff);
+			DrawPixel(loc.X + d, loc.Y + 2, 0xffffffff);
+			DrawPixel(loc.X - 2, loc.Y + d, 0xffffffff);
+			DrawPixel(loc.X + 2, loc.Y + d, 0xffffffff);
+		}
+		//中心玩家颜色 3x3
 		for (int dx = -1; dx <= 1; dx++) {
 			for (int dy = -1; dy <= 1; dy++) {
 				DrawPixel(loc.X + dx, loc.Y + dy, color);

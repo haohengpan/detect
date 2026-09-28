@@ -176,6 +176,7 @@ void icome::icome()
 	__except (filter(GetExceptionCode(), GetExceptionInformation())) {
 		if (logger) logger->error("avatarHack::init failed");
 	}
+	initMiniMapHack();
 	if (logger) logger->info("hooks installed");
 	//5fps is enough
 	if (hWnd) {
