@@ -1,82 +1,98 @@
 #include "pch.h"
 #include "avatarHack.h"
-#include <tlhelp32.h>
-#include <vector>
+#include "unitTracker.h"
 
-//小地图无视野头像（平台原生头像方向）：平台进图后把自己的头像绘制代码注入到
-//jass.dll（call [ebp+8] 间接查询 IsUnitVisible）。patch 该调用点为 push 1; pop
-//eax（eax 恒 1 = 可见）。跳过 jass.dll 内暴雪 JASS VM 核心（偏移 0x1F6354）。
-//patch 前暂停进程所有其他线程，避免平台渲染线程执行到半写指令而崩溃
-//（上次"直接检测到异常"即该竞态）。
-static const unsigned char kSig[] = {
-	0x83, 0xC4, 0x0C,	// add esp, 0xC
-	0xFF, 0x55, 0x08,	// call [ebp+8]
-	0x8B, 0x65, 0x10,	// mov esp, [ebp+10]
-	0x03, 0x65, 0xFC,	// add esp, [ebp-4]
-	0x89, 0x45			// mov [ebp+xx], eax
-};
-static const unsigned char kPatch[] = { 0x6A, 0x01, 0x58 };	// push 1; pop eax
-static const unsigned int kSkipOffset = 0x1F6354;	// 暴雪 JASS VM 核心，绝不能碰
+//小地图无视野英雄图标：在小地图单位图标绘制循环的可见性判定处安装跳板，
+//用英雄对象地址表（unitTrack::allunits，每 200ms 刷新）过滤：
+//  - 英雄 -> 直接放行绘制（无视野也画）
+//  - 非英雄 -> 执行原可见性判定（无视野跳过）
+//其后第二道可见性关卡（0x3BDC35）NOP 掉（英雄路径必经）。
+//patch 均在 0x3Bxxxx 渲染区（与全图补丁同区，联机已验证安全）。
+//反汇编依据（1.27.52240）：
+//  0x3BDC23: 85 46 2c          test [esi+0x2C], ax   ;可见性位掩码
+//  0x3BDC26: 0f 84 91 03 00 00 jz skip(0x3BDFBD)
+//  0x3BDC2C: 8b ce             mov ecx, esi        ;继续绘制路径
+//  0x3BDC2E: e8 dd 14 00 00    call ...            ;第二道可见性检查
+//  0x3BDC35: 0f 84 fe 00 00 00 jz skip             ;NOP 掉
+static unsigned int heroObjs[16] = { 0 };
+static unsigned int heroCount = 0;
+static unsigned int contAddr = 0;
+static unsigned int skipAddr = 0;
 
-static unsigned int jassDllBase = 0;
-static unsigned int jassDllSize = 0;
-static bool done = false;
+//跳板：esi=单位对象，ax=1<<slot（可见性位掩码），edx/ecx 可随意使用
+__declspec(naked) static void HookMinimapVis() {
+	_asm {
+		lea  edx, dword ptr [heroObjs]
+		mov  ecx, dword ptr [heroCount]
+	scan_loop:
+		test ecx, ecx
+		jz   not_hero
+		cmp  esi, dword ptr [edx]
+		je   hero_path
+		add  edx, 4
+		dec  ecx
+		jmp  scan_loop
+	not_hero:
+		test word ptr [esi + 0x2C], ax
+		jz   skip_path
+	hero_path:
+		mov  eax, dword ptr [contAddr]
+		jmp  eax
+	skip_path:
+		mov  eax, dword ptr [skipAddr]
+		jmp  eax
+	}
+}
+
+static void patchNop(unsigned int addr, unsigned int len, const char* what) {
+	unsigned char* p = (unsigned char*)addr;
+	DWORD oldProt = 0;
+	if (VirtualProtect(p, len, PAGE_EXECUTE_READWRITE, &oldProt)) {
+		for (unsigned int i = 0; i < len; i++) p[i] = 0x90;
+		VirtualProtect(p, len, oldProt, &oldProt);
+		if (logger) logger->info("avatarHack: nop {0} at {1:x}", what, addr);
+	}
+	else if (logger) {
+		logger->error("avatarHack: VirtualProtect failed at {0:x}", addr);
+	}
+}
 
 void avatarHack::init()
 {
-	HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, GetCurrentProcessId());
-	if (snap != INVALID_HANDLE_VALUE) {
-		MODULEENTRY32 me;
-		me.dwSize = sizeof(me);
-		if (Module32First(snap, &me)) {
-			do {
-				char modName[256] = { 0 };
-				WideCharToMultiByte(CP_ACP, 0, me.szModule, -1, modName, 256, NULL, NULL);
-				if (_stricmp(modName, "jass.dll") == 0) {
-					jassDllBase = (unsigned int)me.modBaseAddr;
-					jassDllSize = me.modBaseSize;
-				}
-			} while (Module32Next(snap, &me));
+	unsigned char* p = (unsigned char*)(gameDll + 0x3BDC23);
+	if (p[0] == 0x85 && p[1] == 0x46 && p[2] == 0x2C && p[3] == 0x0F && p[4] == 0x84) {
+		DWORD oldProt = 0;
+		if (VirtualProtect(p, 5, PAGE_EXECUTE_READWRITE, &oldProt)) {
+			p[0] = 0xE9;
+			*(unsigned int*)(p + 1) = (unsigned int)HookMinimapVis - (gameDll + 0x3BDC23 + 5);
+			VirtualProtect(p, 5, oldProt, &oldProt);
+			if (logger) logger->info("avatarHack: hero-list filter hook installed at {0:x}", gameDll + 0x3BDC23);
 		}
-		CloseHandle(snap);
 	}
-	if (logger) logger->info("avatarHack ready, jass [{0:x}..{1:x}]", jassDllBase, jassDllBase + jassDllSize);
-}
-
-static void suspendOtherThreads(std::vector<HANDLE>& handles)
-{
-	HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
-	if (snap == INVALID_HANDLE_VALUE) return;
-	THREADENTRY32 te;
-	te.dwSize = sizeof(te);
-	DWORD selfId = GetCurrentThreadId();
-	DWORD pid = GetCurrentProcessId();
-	if (Thread32First(snap, &te)) {
-		do {
-			if (te.th32OwnerProcessID == pid && te.th32ThreadID != selfId) {
-				HANDLE h = OpenThread(THREAD_SUSPEND_RESUME, FALSE, te.th32ThreadID);
-				if (h) {
-					if (SuspendThread(h) != (DWORD)-1) handles.push_back(h);
-					else CloseHandle(h);
-				}
-			}
-		} while (Thread32Next(snap, &te));
+	else if (logger) {
+		logger->error("avatarHack: unexpected bytes at +0x3BDC23: {0:x} {1:x} {2:x} {3:x} {4:x}",
+			p[0], p[1], p[2], p[3], p[4]);
 	}
-	CloseHandle(snap);
-}
-
-static void resumeThreads(std::vector<HANDLE>& handles)
-{
-	for (auto h : handles) {
-		ResumeThread(h);
-		CloseHandle(h);
+	unsigned char* p2 = (unsigned char*)(gameDll + 0x3BDC35);
+	if (p2[0] == 0x0F && p2[1] == 0x84 && p2[2] == 0xFE) {
+		patchNop(gameDll + 0x3BDC35, 6, "second visibility check");
 	}
+	else if (logger) {
+		logger->error("avatarHack: unexpected bytes at +0x3BDC35: {0:x} {1:x} {2:x}", p2[0], p2[1], p2[2]);
+	}
+	contAddr = gameDll + 0x3BDC2C;
+	skipAddr = gameDll + 0x3BDFBD;
+	logger->flush();
 }
 
 void avatarHack::ensurePatched()
 {
-	//已禁用：patch 平台注入代码会触发平台自校验断开联机。
-	//平台原生头像在联机环境无法无视野显示（Game.dll 校验、注入代码自校验、
-	//反作弊轮询三重防护）。
-	return;
+	//每 tick 刷新英雄对象地址表（供 hook 过滤）
+	unsigned int count = 0;
+	for (auto& kv : unitTrack::allunits) {
+		if (kv.second && count < 16) {
+			heroObjs[count++] = kv.second->getAddr();
+		}
+	}
+	heroCount = count;
 }
