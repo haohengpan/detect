@@ -1,38 +1,28 @@
 #include "pch.h"
 #include "avatarHack.h"
 
-//观察版：hook 单位图标 setter（Game.dll+0x66C8F0，渲染区 0x66xxxx）。
-//平台"无视野不显示头像"即靠该 setter 清除单位图标（[esi+0x48]=null）。
-//先记录平台的设置/清除行为，验证 hook 地址与调用时机，下一步实现
-//"敌方英雄进雾时保留图标"（不碰可见性判定、不改平台代码）。
-//x86 下用 __fastcall 模拟 __thiscall：第 1 参数走 ecx(this)，第 2 走 edx，其余压栈。
-typedef void(__fastcall* pSetter)(unsigned int thisptr, unsigned int unusedEdx, int a, int b, int c, int d, int e);
-static pSetter origSetter = NULL;
-
-static unsigned int setterCalls = 0;
-static unsigned int lastEsi = 0;
-static unsigned int lastE = 0;
-static unsigned int lastCaller = 0;
-
-static void __fastcall HookSetter(unsigned int thisptr, unsigned int unusedEdx, int a, int b, int c, int d, int e)
-{
-	setterCalls++;
-	lastEsi = thisptr;
-	lastE = (unsigned int)e;
-	lastCaller = (unsigned int)_ReturnAddress();
-	origSetter(thisptr, unusedEdx, a, b, c, d, e);
+//恢复版 + 调查：上次 hook 0x66C8F0 是函数中间指令（破坏指令流导致 INT3 崩溃）。
+//本次只 dump 0x66C8C0 起 256 字节，覆盖 setter 真实入口（约 0x66C8D0，模式
+//55 8b ec 56 8b f1 ...）与完整函数体，供确定精确 hook 点。
+static void dumpBytes(const char* name, unsigned int addr, unsigned int len) {
+	if (!logger) return;
+	unsigned char* p = (unsigned char*)addr;
+	char buff[512];
+	int n = sprintf_s(buff, 512, "%s @%08x:", name, addr);
+	for (unsigned int i = 0; i < len; i++) {
+		n += sprintf_s(buff + n, 512 - n, " %02x", p[i]);
+		if (i % 16 == 15 || i == len - 1) {
+			logger->info("{0}", buff);
+			buff[0] = 0;
+			n = 0;
+		}
+	}
 }
 
 void avatarHack::init()
 {
-	origSetter = (pSetter)(gameDll + 0x66C8F0);
-	int error = DetourTransactionBegin();
-	if (error == NO_ERROR) {
-		DetourUpdateThread(GetCurrentThread());
-		DetourAttach(&(PVOID&)origSetter, HookSetter);
-		DetourTransactionCommit();
-	}
-	if (logger) logger->info("avatarHack: setter hook installed at {0:x}", gameDll + 0x66C8F0);
+	dumpBytes("setterFull", gameDll + 0x66C8C0, 256);
+	logger->flush();
 }
 
 void avatarHack::ensurePatched()
@@ -41,8 +31,4 @@ void avatarHack::ensurePatched()
 
 void avatarHack::logStats()
 {
-	if (logger) {
-		logger->info("avatarHack setter: calls {0} esi {1:x} e {2:x} caller {3:x}",
-			setterCalls, lastEsi, lastE, lastCaller);
-	}
 }
