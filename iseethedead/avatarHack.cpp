@@ -3,51 +3,47 @@
 #include <tlhelp32.h>
 #include <psapi.h>
 
-//小地图无视野头像（数据方案 + 线程分流）：
-//扫描进程可写内存，把存有 IsUnitVisible 地址（gameDll+0x1E8E80）的函数指针
-//改为指向 StubUnitVisible。stub 按调用线程分流：
-//  - 渲染线程（高频，100ms 内 >=30 次）：返回 true（头像查询放行）
-//  - 其他线程（反作弊轮询，低频）：调用原函数返回真实值（服务端校验通过）
-//只改数据不改代码；锁定渲染线程前所有调用走原函数（安全）。
+//小地图无视野头像（数据方案 + 调用者归属分流）：
+//把平台函数表中的 IsUnitVisible 指针改为 StubUnitVisible（naked）。
+//stub 从平台包装函数的帧提取其调用者地址：
+//  - 调用者在 Game.dll 内 = 游戏逻辑查询 -> 原函数真实值（避免 desync）
+//  - 调用者在平台代码区（jass.dll 注入区/平台 DLL/动态内存）= 头像绘制 -> true
 static bool(__cdecl* origIsUnitVisible)(unsigned int, unsigned int) = NULL;
-static unsigned int renderThreadId = 0;
-static unsigned int candidateTid = 0;
-static unsigned int candidateCount = 0;
-static unsigned int candidateWin = 0;
+static unsigned int gCaller = 0;
 static unsigned int trueCalls = 0;
 static unsigned int origCalls = 0;
 
-static bool __cdecl StubUnitVisible(unsigned int a, unsigned int b)
-{
-	unsigned int tid = GetCurrentThreadId();
-	if (renderThreadId != 0) {
-		if (tid == renderThreadId) {
-			trueCalls++;
-			return true;
-		}
+static unsigned int gameDllBase = 0;
+static unsigned int gameDllSize = 0;
+
+static bool StubLogic() {
+	unsigned int caller = gCaller;
+	if (gameDllBase != 0 && gameDllSize != 0 &&
+		caller >= gameDllBase && caller < gameDllBase + gameDllSize) {
 		origCalls++;
-		return origIsUnitVisible(a, b);
+		return false;
 	}
-	unsigned int now = GetTickCount();
-	if (candidateTid != tid || now - candidateWin >= 100) {
-		candidateTid = tid;
-		candidateCount = 0;
-		candidateWin = now;
+	trueCalls++;
+	return true;
+}
+
+__declspec(naked) static void StubUnitVisible() {
+	_asm {
+		mov  eax, [ebp + 4]			//ebp 尚为平台包装函数帧，[ebp+4]=其调用者地址
+		mov  dword ptr [gCaller], eax
+		push ebp
+		call StubLogic
+		pop  ebp
+		test eax, eax
+		jz   orig_path
+		mov  eax, 1
+		ret
+	orig_path:
+		jmp  dword ptr [origIsUnitVisible]
 	}
-	candidateCount++;
-	if (candidateCount >= 30) {
-		renderThreadId = tid;
-		if (logger) logger->info("avatarHack: render thread locked {0:x}", tid);
-		trueCalls++;
-		return true;
-	}
-	origCalls++;
-	return origIsUnitVisible(a, b);
 }
 
 static unsigned int targetAddr = 0;
-static unsigned int gameDllBase = 0;
-static unsigned int gameDllSize = 0;
 static unsigned int ownDllBase = 0;
 static unsigned int ownDllSize = 0;
 static unsigned int jassDllBase = 0;
@@ -103,7 +99,8 @@ void avatarHack::init()
 		}
 		CloseHandle(snap);
 	}
-	if (logger) logger->info("avatarHack ready, target {0:x}", targetAddr);
+	if (logger) logger->info("avatarHack ready, target {0:x} gameDll [{1:x}..{2:x}]",
+		targetAddr, gameDllBase, gameDllBase + gameDllSize);
 }
 
 void avatarHack::ensurePatched()
@@ -143,7 +140,6 @@ void avatarHack::ensurePatched()
 void avatarHack::logStats()
 {
 	if (logger) {
-		logger->info("avatarHack: renderTid {0:x} true {1} orig {2}",
-			renderThreadId, trueCalls, origCalls);
+		logger->info("avatarHack: caller {0:x} true {1} orig {2}", gCaller, trueCalls, origCalls);
 	}
 }
