@@ -75,40 +75,8 @@ static void resumeThreads(std::vector<HANDLE>& handles)
 
 void avatarHack::ensurePatched()
 {
-	if (done) return;
-	if (!jassDllBase) return;
-	unsigned char* base = (unsigned char*)jassDllBase;
-	unsigned char* end = base + jassDllSize;
-	unsigned char* p = base;
-	unsigned char* found = nullptr;
-	while (p + sizeof(kSig) <= end) {
-		unsigned int remain = (unsigned int)(end - p);
-		p = (unsigned char*)memchr(p, kSig[0], remain);
-		if (!p) break;
-		if ((unsigned int)(end - p) < sizeof(kSig)) break;
-		if (memcmp(p, kSig, sizeof(kSig)) == 0) {
-			unsigned int off = (unsigned int)(p - base);
-			if (off != kSkipOffset) {
-				found = p + 3;
-				break;
-			}
-		}
-		p++;
-	}
-	if (!found) return;	//平台代码尚未注入，下次 tick 重试
-	std::vector<HANDLE> handles;
-	suspendOtherThreads(handles);
-	if (found[0] == 0xFF && found[1] == 0x55 && found[2] == 0x08) {
-		DWORD oldProt = 0;
-		if (VirtualProtect(found, 3, PAGE_EXECUTE_READWRITE, &oldProt)) {
-			found[0] = kPatch[0];
-			found[1] = kPatch[1];
-			found[2] = kPatch[2];
-			VirtualProtect(found, 3, oldProt, &oldProt);
-			done = true;
-			if (logger) logger->info("avatarHack: patched jass.dll+{0:x} ({1:x})",
-				(unsigned int)(found - base), (unsigned int)found);
-		}
-	}
-	resumeThreads(handles);
+	//已禁用：patch 平台注入代码会触发平台自校验断开联机。
+	//平台原生头像在联机环境无法无视野显示（Game.dll 校验、注入代码自校验、
+	//反作弊轮询三重防护）。
+	return;
 }
