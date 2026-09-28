@@ -19,6 +19,8 @@ static unsigned int heroCount = 0;
 static unsigned int contAddr = 0;
 static unsigned int skipAddr = 0;
 
+static unsigned int statHero = 0, statOther = 0, statPass = 0, statSkip = 0;
+
 //跳板：esi=单位对象，ax=1<<slot（可见性位掩码），edx/ecx 可随意使用
 __declspec(naked) static void HookMinimapVis() {
 	_asm {
@@ -33,12 +35,16 @@ __declspec(naked) static void HookMinimapVis() {
 		dec  ecx
 		jmp  scan_loop
 	not_hero:
+		inc  dword ptr [statOther]
 		test word ptr [esi + 0x2C], ax
 		jz   skip_path
+		inc  dword ptr [statPass]
 	hero_path:
+		inc  dword ptr [statHero]
 		mov  eax, dword ptr [contAddr]
 		jmp  eax
 	skip_path:
+		inc  dword ptr [statSkip]
 		mov  eax, dword ptr [skipAddr]
 		jmp  eax
 	}
@@ -54,6 +60,21 @@ static void patchNop(unsigned int addr, unsigned int len, const char* what) {
 	}
 	else if (logger) {
 		logger->error("avatarHack: VirtualProtect failed at {0:x}", addr);
+	}
+}
+
+static void dumpBytes(const char* name, unsigned int addr, unsigned int len) {
+	if (!logger) return;
+	unsigned char* p = (unsigned char*)addr;
+	char buff[512];
+	int n = sprintf_s(buff, 512, "%s @%08x:", name, addr);
+	for (unsigned int i = 0; i < len; i++) {
+		n += sprintf_s(buff + n, 512 - n, " %02x", p[i]);
+		if (i % 16 == 15 || i == len - 1) {
+			logger->info("{0}", buff);
+			buff[0] = 0;
+			n = 0;
+		}
 	}
 }
 
@@ -82,8 +103,12 @@ void avatarHack::init()
 	}
 	contAddr = gameDll + 0x3BDC2C;
 	skipAddr = gameDll + 0x3BDFBD;
+	//英雄图标绘制流程后续代码（0x3BDC40 之后可能还有可见性关卡）
+	dumpBytes("heroDrawTail", gameDll + 0x3BDC40, 512);
 	logger->flush();
 }
+
+static unsigned int lastHeroCount = 0xFFFFFFFF;
 
 void avatarHack::ensurePatched()
 {
@@ -95,4 +120,16 @@ void avatarHack::ensurePatched()
 		}
 	}
 	heroCount = count;
+	if (count != lastHeroCount) {
+		lastHeroCount = count;
+		if (logger) logger->info("avatarHack: hero list updated, count {0}", count);
+	}
+}
+
+void avatarHack::logStats()
+{
+	if (logger) {
+		logger->info("avatarHack: heroCount {0} hero {1} other {2} pass {3} skip {4}",
+			heroCount, statHero, statOther, statPass, statSkip);
+	}
 }
