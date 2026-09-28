@@ -1,94 +1,114 @@
 #include "pch.h"
 #include "avatarHack.h"
-#include "unitTracker.h"
+#include <tlhelp32.h>
+#include <vector>
 
-//小地图无视野英雄头像（最终方案）：
-//在小地图单位图标绘制循环的可见性判定处安装跳板 hook：
-//  - 英雄（vtable 与 unitTrack::allunits 中英雄一致）-> 直接放行绘制
-//  - 非英雄 -> 执行原可见性判定（无视野时跳过，不显示）
-//其后第二道可见性关卡（0x3BDC35）保持 NOP（英雄路径必经）。
-//patch 区域均在 0x3Bxxxx 渲染区（与全图补丁同区，联机已验证安全）。
-//反汇编依据（1.27.52240）：
-//  0x3BDC23: 85 46 2c          test [esi+0x2C], ax   ;可见性位掩码
-//  0x3BDC26: 0f 84 91 03 00 00 jz skip(0x3BDFBD)
-//  0x3BDC2C: 8b ce             mov ecx, esi        ;继续绘制路径
-//  0x3BDC2E: e8 dd 14 00 00    call ...            ;第二道可见性检查
-//  0x3BDC35: 0f 84 fe 00 00 00 jz skip             ;NOP 掉
-static unsigned int heroVtable = 0;
-static unsigned int contAddr = 0;
-static unsigned int skipAddr = 0;
+//小地图无视野头像（平台原生头像方向）：平台进图后把自己的头像绘制代码注入到
+//jass.dll（call [ebp+8] 间接查询 IsUnitVisible）。patch 该调用点为 push 1; pop
+//eax（eax 恒 1 = 可见）。跳过 jass.dll 内暴雪 JASS VM 核心（偏移 0x1F6354）。
+//patch 前暂停进程所有其他线程，避免平台渲染线程执行到半写指令而崩溃
+//（上次"直接检测到异常"即该竞态）。
+static const unsigned char kSig[] = {
+	0x83, 0xC4, 0x0C,	// add esp, 0xC
+	0xFF, 0x55, 0x08,	// call [ebp+8]
+	0x8B, 0x65, 0x10,	// mov esp, [ebp+10]
+	0x03, 0x65, 0xFC,	// add esp, [ebp-4]
+	0x89, 0x45			// mov [ebp+xx], eax
+};
+static const unsigned char kPatch[] = { 0x6A, 0x01, 0x58 };	// push 1; pop eax
+static const unsigned int kSkipOffset = 0x1F6354;	// 暴雪 JASS VM 核心，绝不能碰
 
-__declspec(naked) static void HookMinimapVis() {
-	_asm {
-		cmp dword ptr [heroVtable], 0
-		je  orig_logic
-		mov eax, [esi]
-		cmp eax, dword ptr [heroVtable]
-		je  hero_path
-	orig_logic:
-		test word ptr [esi + 0x2C], ax
-		jz  skip_path
-	hero_path:
-		mov eax, dword ptr [contAddr]
-		jmp eax
-	skip_path:
-		mov eax, dword ptr [skipAddr]
-		jmp eax
-	}
-}
-
-static void patchNop(unsigned int addr, unsigned int len, const char* what) {
-	unsigned char* p = (unsigned char*)addr;
-	DWORD oldProt = 0;
-	if (VirtualProtect(p, len, PAGE_EXECUTE_READWRITE, &oldProt)) {
-		for (unsigned int i = 0; i < len; i++) p[i] = 0x90;
-		VirtualProtect(p, len, oldProt, &oldProt);
-		if (logger) logger->info("avatarHack: nop {0} at {1:x}", what, addr);
-	}
-	else if (logger) {
-		logger->error("avatarHack: VirtualProtect failed at {0:x}", addr);
-	}
-}
+static unsigned int jassDllBase = 0;
+static unsigned int jassDllSize = 0;
+static bool done = false;
 
 void avatarHack::init()
 {
-	unsigned char* p = (unsigned char*)(gameDll + 0x3BDC23);
-	if (p[0] == 0x85 && p[1] == 0x46 && p[2] == 0x2C && p[3] == 0x0F && p[4] == 0x84) {
-		DWORD oldProt = 0;
-		if (VirtualProtect(p, 5, PAGE_EXECUTE_READWRITE, &oldProt)) {
-			p[0] = 0xE9;
-			*(unsigned int*)(p + 1) = (unsigned int)HookMinimapVis - (gameDll + 0x3BDC23 + 5);
-			VirtualProtect(p, 5, oldProt, &oldProt);
-			if (logger) logger->info("avatarHack: hero-filter hook installed at {0:x}", gameDll + 0x3BDC23);
+	HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, GetCurrentProcessId());
+	if (snap != INVALID_HANDLE_VALUE) {
+		MODULEENTRY32 me;
+		me.dwSize = sizeof(me);
+		if (Module32First(snap, &me)) {
+			do {
+				char modName[256] = { 0 };
+				WideCharToMultiByte(CP_ACP, 0, me.szModule, -1, modName, 256, NULL, NULL);
+				if (_stricmp(modName, "jass.dll") == 0) {
+					jassDllBase = (unsigned int)me.modBaseAddr;
+					jassDllSize = me.modBaseSize;
+				}
+			} while (Module32Next(snap, &me));
 		}
+		CloseHandle(snap);
 	}
-	else if (logger) {
-		logger->error("avatarHack: unexpected bytes at +0x3BDC23: {0:x} {1:x} {2:x} {3:x} {4:x}",
-			p[0], p[1], p[2], p[3], p[4]);
+	if (logger) logger->info("avatarHack ready, jass [{0:x}..{1:x}]", jassDllBase, jassDllBase + jassDllSize);
+}
+
+static void suspendOtherThreads(std::vector<HANDLE>& handles)
+{
+	HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+	if (snap == INVALID_HANDLE_VALUE) return;
+	THREADENTRY32 te;
+	te.dwSize = sizeof(te);
+	DWORD selfId = GetCurrentThreadId();
+	DWORD pid = GetCurrentProcessId();
+	if (Thread32First(snap, &te)) {
+		do {
+			if (te.th32OwnerProcessID == pid && te.th32ThreadID != selfId) {
+				HANDLE h = OpenThread(THREAD_SUSPEND_RESUME, FALSE, te.th32ThreadID);
+				if (h) {
+					if (SuspendThread(h) != (DWORD)-1) handles.push_back(h);
+					else CloseHandle(h);
+				}
+			}
+		} while (Thread32Next(snap, &te));
 	}
-	unsigned char* p2 = (unsigned char*)(gameDll + 0x3BDC35);
-	if (p2[0] == 0x0F && p2[1] == 0x84 && p2[2] == 0xFE) {
-		patchNop(gameDll + 0x3BDC35, 6, "second visibility check");
+	CloseHandle(snap);
+}
+
+static void resumeThreads(std::vector<HANDLE>& handles)
+{
+	for (auto h : handles) {
+		ResumeThread(h);
+		CloseHandle(h);
 	}
-	else if (logger) {
-		logger->error("avatarHack: unexpected bytes at +0x3BDC35: {0:x} {1:x} {2:x}", p2[0], p2[1], p2[2]);
-	}
-	contAddr = gameDll + 0x3BDC2C;
-	skipAddr = gameDll + 0x3BDFBD;
-	logger->flush();
 }
 
 void avatarHack::ensurePatched()
 {
-	if (heroVtable) return;
-	for (auto& kv : unitTrack::allunits) {
-		if (kv.second) {
-			unsigned int vt = *(unsigned int*)kv.second->getAddr();
-			if (vt) {
-				heroVtable = vt;
-				if (logger) logger->info("avatarHack: hero vtable {0:x}", vt);
+	if (done) return;
+	if (!jassDllBase) return;
+	unsigned char* base = (unsigned char*)jassDllBase;
+	unsigned char* end = base + jassDllSize;
+	unsigned char* p = base;
+	unsigned char* found = nullptr;
+	while (p + sizeof(kSig) <= end) {
+		unsigned int remain = (unsigned int)(end - p);
+		p = (unsigned char*)memchr(p, kSig[0], remain);
+		if (!p) break;
+		if ((unsigned int)(end - p) < sizeof(kSig)) break;
+		if (memcmp(p, kSig, sizeof(kSig)) == 0) {
+			unsigned int off = (unsigned int)(p - base);
+			if (off != kSkipOffset) {
+				found = p + 3;
 				break;
 			}
 		}
+		p++;
 	}
+	if (!found) return;	//平台代码尚未注入，下次 tick 重试
+	std::vector<HANDLE> handles;
+	suspendOtherThreads(handles);
+	if (found[0] == 0xFF && found[1] == 0x55 && found[2] == 0x08) {
+		DWORD oldProt = 0;
+		if (VirtualProtect(found, 3, PAGE_EXECUTE_READWRITE, &oldProt)) {
+			found[0] = kPatch[0];
+			found[1] = kPatch[1];
+			found[2] = kPatch[2];
+			VirtualProtect(found, 3, oldProt, &oldProt);
+			done = true;
+			if (logger) logger->info("avatarHack: patched jass.dll+{0:x} ({1:x})",
+				(unsigned int)(found - base), (unsigned int)found);
+		}
+	}
+	resumeThreads(handles);
 }
