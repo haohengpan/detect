@@ -2,6 +2,9 @@
 #include "avatarHack.h"
 #include <tlhelp32.h>
 #include <psapi.h>
+#include "player.h"
+
+extern gamePlayerInfo* aPlayerInfo;
 
 //小地图无视野头像（数据方案 + 调用者归属分流）：
 //把平台函数表中的 IsUnitVisible 指针改为 StubUnitVisible（naked）。
@@ -49,6 +52,7 @@ static unsigned int ownDllSize = 0;
 static unsigned int jassDllBase = 0;
 static unsigned int jassDllSize = 0;
 static bool patched = false;
+static bool onlineLogged = false;
 
 static bool inRange(unsigned int addr, unsigned int base, unsigned int size) {
 	return addr >= base && addr < base + size;
@@ -103,10 +107,31 @@ void avatarHack::init()
 		targetAddr, gameDllBase, gameDllBase + gameDllSize);
 }
 
+//联机检测：人类玩家数 > 1 即联机局。联机局启用头像会导致 War3 同步校验失败
+//（"检测到异步"/断线重连）——平台拿到"可见"后会执行影响同步状态的操作。
+static bool isOnlineGame() {
+	if (!aPlayerInfo) return false;
+	unsigned int humans = 0;
+	for (int i = 0; i < 12; i++) {
+		unsigned int h = aPlayerInfo->getPlayerHandle(i);
+		if (h && jass::GetPlayerController(h) == 0) {	// MAP_CONTROL_USER
+			humans++;
+		}
+	}
+	return humans > 1;
+}
+
 void avatarHack::ensurePatched()
 {
 	if (patched) return;
 	if (!targetAddr) return;
+	if (isOnlineGame()) {
+		if (!onlineLogged) {
+			onlineLogged = true;
+			if (logger) logger->info("avatarHack: online game detected, avatar feature disabled to avoid desync");
+		}
+		return;
+	}
 	unsigned char* addr = (unsigned char*)0x10000;
 	unsigned char* maxAddr = (unsigned char*)0x7FFE0000;
 	unsigned int count = 0;
