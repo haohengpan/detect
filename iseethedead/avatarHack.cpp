@@ -1,9 +1,9 @@
 #include "pch.h"
 #include "avatarHack.h"
 
-//调查：主循环 call 目标精确计算为 0x66E8F0（此前 0x66C8F0 是算术错误）。
-//dump 0x66E8C0 起 128 字节验证函数结构（预期类似图标 setter：... 89 7e 48 /
-//5f 5e 5d / c2 14 00）。
+//调查：真正的图标 setter 是 0x66C8C0 附近那个（尾部 89 7e 48/5f 5e 5d/c2 14 00
+//引用计数管理结构），但入口在 0x66C8C0 之前。dump 0x66C880 起 192 字节
+//确定入口（预期 55 8b ec 56 8b f1 ... 模式）。
 static void dumpBytes(const char* name, unsigned int addr, unsigned int len) {
 	if (!logger) return;
 	unsigned char* p = (unsigned char*)addr;
@@ -21,7 +21,7 @@ static void dumpBytes(const char* name, unsigned int addr, unsigned int len) {
 
 void avatarHack::init()
 {
-	dumpBytes("realSetter", gameDll + 0x66E8C0, 128);
+	dumpBytes("setterEntry", gameDll + 0x66C880, 192);
 	logger->flush();
 }
 
