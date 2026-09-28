@@ -301,3 +301,16 @@ bool PostChatMessage(const char* msg, float duration, unsigned int PlayerSlot, u
 	}
 	return false;
 }
+
+bool IsOnlineGame() {
+	extern gamePlayerInfo* aPlayerInfo;
+	if (!aPlayerInfo) return false;
+	unsigned int humans = 0;
+	for (int i = 0; i < 12; i++) {
+		unsigned int h = aPlayerInfo->getPlayerHandle(i);
+		if (h && jass::GetPlayerController(h) == 0) {	// MAP_CONTROL_USER
+			humans++;
+		}
+	}
+	return humans > 1;
+}

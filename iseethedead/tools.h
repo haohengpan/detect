@@ -19,3 +19,4 @@ bool FilterOrderId(unsigned int orderId);
 
 void DisplayChatMessage(const char* msg, float duration = 60.0f, unsigned int PlayerSlot = PlayerLocal(), unsigned int chattype = CHAT_RECIPIENT_OBSERVERS);
 bool PostChatMessage(const char* msg, float duration = 60.0f, unsigned int PlayerSlot = PlayerLocal(), unsigned int chattype = CHAT_RECIPIENT_OBSERVERS);
+bool IsOnlineGame();

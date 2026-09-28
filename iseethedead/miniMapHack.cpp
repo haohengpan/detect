@@ -322,8 +322,10 @@ void MiniMapHack::DrawMiniMap()
 
 void MiniMapHack::DrawEnemyHeroes()
 {
-	//无视野也画敌方英雄：直接写小地图缓冲，不经过可见性查询（避免被平台检测）
-	//玩家颜色 3x3 色块 + 白色描边，在小地图上醒目区分英雄与其他单位
+	//联机局自绘敌方英雄位置标记（玩家颜色 3x3 色块 + 白色描边），
+	//直接写小地图缓冲，纯渲染层、同步零影响。
+	//单机局由 avatarHack 的平台原生头像负责，这里不画避免重叠。
+	if (!IsOnlineGame()) return;
 	for (auto& kv : unitTrack::allunits) {
 		auto& u = kv.second;
 		if (!u || !u->isEnemyHero()) continue;
