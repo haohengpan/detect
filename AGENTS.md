@@ -23,7 +23,7 @@
   - `memedit.*` — code patches + Detours (`applyPatch`, `applyDetour`)
   - `mhDetect.*` — detects other players' out-of-view click behavior
   - `safeclick.*` — "safe" clicks + gray healthbars for fogged units
-  - `miniMapHack.*` — minimap pings/HP numbers; `DrawEnemyHeroes()` draws enemy-hero color blocks straight into the minimap buffer (no visibility query — hooking `IsUnitVisible`/`IsVisibleToPlayer` gets detected by the 16-platform and drops the game)
+  - `miniMapHack.*` — minimap pings/HP numbers; `DrawEnemyHeroes()` draws enemy-hero color blocks (white outline) straight into the minimap buffer, single- and multiplayer (no visibility query — hooking `IsUnitVisible`/`IsVisibleToPlayer` gets detected by the 16-platform and drops the game)
   - `unitTracker.*` — hooks unit create/destroy events
   - `antiExploit.*`, `player.*`, `tools.*` — shared helpers (order IDs, chat, version check)
 

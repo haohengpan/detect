@@ -322,10 +322,8 @@ void MiniMapHack::DrawMiniMap()
 
 void MiniMapHack::DrawEnemyHeroes()
 {
-	//联机局自绘敌方英雄位置标记（玩家颜色 3x3 色块 + 白色描边），
+	//单机/联机均自绘敌方英雄位置标记：玩家颜色 5x5 色块 + 白色描边（7x7 外圈），
 	//直接写小地图缓冲，纯渲染层、同步零影响。
-	//单机局由 avatarHack 的平台原生头像负责，这里不画避免重叠。
-	if (!IsOnlineGame()) return;
 	for (auto& kv : unitTrack::allunits) {
 		auto& u = kv.second;
 		if (!u || !u->isEnemyHero()) continue;
@@ -335,16 +333,16 @@ void MiniMapHack::DrawEnemyHeroes()
 		loc.Y = CoordToMinimap(u->GetUnitY(), 0x70);
 		ConvertMmap(loc);
 		uint32_t color = GetPlayerColorHEX(u->getPlayerSlot());
-		//外圈白色描边（5x5 边框）
-		for (int d = -2; d <= 2; d++) {
-			DrawPixel(loc.X + d, loc.Y - 2, 0xffffffff);
-			DrawPixel(loc.X + d, loc.Y + 2, 0xffffffff);
-			DrawPixel(loc.X - 2, loc.Y + d, 0xffffffff);
-			DrawPixel(loc.X + 2, loc.Y + d, 0xffffffff);
+		//外圈白色描边（7x7 边框）
+		for (int d = -3; d <= 3; d++) {
+			DrawPixel(loc.X + d, loc.Y - 3, 0xffffffff);
+			DrawPixel(loc.X + d, loc.Y + 3, 0xffffffff);
+			DrawPixel(loc.X - 3, loc.Y + d, 0xffffffff);
+			DrawPixel(loc.X + 3, loc.Y + d, 0xffffffff);
 		}
-		//中心玩家颜色 3x3
-		for (int dx = -1; dx <= 1; dx++) {
-			for (int dy = -1; dy <= 1; dy++) {
+		//中心玩家颜色 5x5
+		for (int dx = -2; dx <= 2; dx++) {
+			for (int dy = -2; dy <= 2; dy++) {
 				DrawPixel(loc.X + dx, loc.Y + dy, color);
 			}
 		}

@@ -8,7 +8,6 @@
 #include "mhDetect.h"
 #include "safeclick.h"
 #include "antiExploit.h"
-#include "avatarHack.h"
 #include <random>
 
 HANDLE DrawMiniMapThread = 0;
@@ -73,10 +72,8 @@ void CALLBACK icome::timer(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime)
 			);
 			DisplayText(buff);*/
 			unitTrack::processUnitCreationEvent();
-			avatarHack::ensurePatched();
 			updateTag();
 			if (dwTime - 10000 >= lastLogTime) {
-				avatarHack::logStats();
 				logger->flush();
 				lastLogTime = dwTime;
 			}
@@ -171,10 +168,6 @@ void icome::icome()
 	__try { unitTrack::hook(); }
 	__except (filter(GetExceptionCode(), GetExceptionInformation())) {
 		if (logger) logger->error("unitTrack::hook failed");
-	}
-	__try { avatarHack::init(); }
-	__except (filter(GetExceptionCode(), GetExceptionInformation())) {
-		if (logger) logger->error("avatarHack::init failed");
 	}
 	initMiniMapHack();
 	if (logger) logger->info("hooks installed");

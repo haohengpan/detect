@@ -91,7 +91,6 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="antiExploit.cpp" />
-    <ClCompile Include="avatarHack.cpp" />
     <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="icome.cpp" />
     <ClCompile Include="Jass.cpp" />
@@ -110,7 +109,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="antiExploit.h" />
-    <ClInclude Include="avatarHack.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="icome.h" />
     <ClInclude Include="Jass.h" />
