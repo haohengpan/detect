@@ -320,10 +320,51 @@ void MiniMapHack::DrawMiniMap()
 	DrawEnemyHeroes();
 }
 
+static const unsigned char digitMasks[10][5] = {
+	{0b111,0b101,0b101,0b101,0b111},	//0
+	{0b010,0b010,0b010,0b010,0b010},	//1
+	{0b111,0b001,0b111,0b100,0b111},	//2
+	{0b111,0b001,0b111,0b001,0b111},	//3
+	{0b101,0b101,0b111,0b001,0b001},	//4
+	{0b111,0b100,0b111,0b001,0b111},	//5
+	{0b111,0b100,0b111,0b101,0b111},	//6
+	{0b111,0b001,0b001,0b001,0b001},	//7
+	{0b111,0b101,0b111,0b101,0b111},	//8
+	{0b111,0b101,0b111,0b001,0b111},	//9
+};
+
 void MiniMapHack::DrawEnemyHeroes()
 {
-	//单机/联机均自绘敌方英雄位置标记：玩家颜色 5x5 色块 + 白色描边（7x7 外圈），
+	//单机/联机均自绘敌方英雄位置标记：玩家颜色 7x7 色块 + 白色描边（9x9 外圈）
+	//+ 中心玩家编号数字（白字黑边，玩家号唯一对应英雄）。
 	//直接写小地图缓冲，纯渲染层、同步零影响。
+	auto drawDigit = [this](int x, int y, int d, uint32_t color) {
+		for (int row = 0; row < 5; row++) {
+			unsigned char m = digitMasks[d][row];
+			for (int col = 0; col < 3; col++) {
+				if (m & (1 << col)) DrawPixel(x + col, y + row, color);
+			}
+		}
+	};
+	auto drawNumber = [&](int cx, int y, unsigned int num) {
+		int tens = -1, ones = num % 10;
+		if (num >= 10) tens = num / 10;
+		int startX = (tens >= 0) ? (cx - 3) : (cx - 1);
+		auto stamp = [&](int sx, int sd) {
+			drawDigit(sx - 1, y, sd, 0xff000000);
+			drawDigit(sx + 1, y, sd, 0xff000000);
+			drawDigit(sx, y - 1, sd, 0xff000000);
+			drawDigit(sx, y + 1, sd, 0xff000000);
+			drawDigit(sx, y, sd, 0xffffffff);
+		};
+		if (tens >= 0) {
+			stamp(startX, tens);
+			stamp(startX + 4, ones);
+		}
+		else {
+			stamp(startX, num);
+		}
+	};
 	for (auto& kv : unitTrack::allunits) {
 		auto& u = kv.second;
 		if (!u || !u->isEnemyHero()) continue;
@@ -333,19 +374,21 @@ void MiniMapHack::DrawEnemyHeroes()
 		loc.Y = CoordToMinimap(u->GetUnitY(), 0x70);
 		ConvertMmap(loc);
 		uint32_t color = GetPlayerColorHEX(u->getPlayerSlot());
-		//外圈白色描边（7x7 边框）
-		for (int d = -3; d <= 3; d++) {
-			DrawPixel(loc.X + d, loc.Y - 3, 0xffffffff);
-			DrawPixel(loc.X + d, loc.Y + 3, 0xffffffff);
-			DrawPixel(loc.X - 3, loc.Y + d, 0xffffffff);
-			DrawPixel(loc.X + 3, loc.Y + d, 0xffffffff);
-		}
-		//中心玩家颜色 5x5
-		for (int dx = -2; dx <= 2; dx++) {
-			for (int dy = -2; dy <= 2; dy++) {
+		//中心玩家颜色 7x7
+		for (int dx = -3; dx <= 3; dx++) {
+			for (int dy = -3; dy <= 3; dy++) {
 				DrawPixel(loc.X + dx, loc.Y + dy, color);
 			}
 		}
+		//外圈白色描边（9x9 边框）
+		for (int d = -4; d <= 4; d++) {
+			DrawPixel(loc.X + d, loc.Y - 4, 0xffffffff);
+			DrawPixel(loc.X + d, loc.Y + 4, 0xffffffff);
+			DrawPixel(loc.X - 4, loc.Y + d, 0xffffffff);
+			DrawPixel(loc.X + 4, loc.Y + d, 0xffffffff);
+		}
+		//中心玩家编号数字（白字黑边）
+		drawNumber(loc.X, loc.Y - 2, u->getPlayerSlot() + 1);
 	}
 }
 
