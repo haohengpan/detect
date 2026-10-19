@@ -374,18 +374,18 @@ void MiniMapHack::DrawEnemyHeroes()
 		loc.Y = CoordToMinimap(u->GetUnitY(), 0x70);
 		ConvertMmap(loc);
 		uint32_t color = GetPlayerColorHEX(u->getPlayerSlot());
-		//中心玩家颜色 7x7
-		for (int dx = -3; dx <= 3; dx++) {
-			for (int dy = -3; dy <= 3; dy++) {
+		//中心玩家颜色 13x13
+		for (int dx = -6; dx <= 6; dx++) {
+			for (int dy = -6; dy <= 6; dy++) {
 				DrawPixel(loc.X + dx, loc.Y + dy, color);
 			}
 		}
-		//外圈白色描边（9x9 边框）
-		for (int d = -4; d <= 4; d++) {
-			DrawPixel(loc.X + d, loc.Y - 4, 0xffffffff);
-			DrawPixel(loc.X + d, loc.Y + 4, 0xffffffff);
-			DrawPixel(loc.X - 4, loc.Y + d, 0xffffffff);
-			DrawPixel(loc.X + 4, loc.Y + d, 0xffffffff);
+		//外圈白色描边（15x15 边框）
+		for (int d = -7; d <= 7; d++) {
+			DrawPixel(loc.X + d, loc.Y - 7, 0xffffffff);
+			DrawPixel(loc.X + d, loc.Y + 7, 0xffffffff);
+			DrawPixel(loc.X - 7, loc.Y + d, 0xffffffff);
+			DrawPixel(loc.X + 7, loc.Y + d, 0xffffffff);
 		}
 		//中心玩家编号数字（白字黑边）
 		drawNumber(loc.X, loc.Y - 2, u->getPlayerSlot() + 1);
