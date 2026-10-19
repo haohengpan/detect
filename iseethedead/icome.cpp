@@ -8,6 +8,7 @@
 #include "mhDetect.h"
 #include "safeclick.h"
 #include "antiExploit.h"
+#include "abilityHack.h"
 #include <random>
 
 HANDLE DrawMiniMapThread = 0;
@@ -72,6 +73,7 @@ void CALLBACK icome::timer(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime)
 			);
 			DisplayText(buff);*/
 			unitTrack::processUnitCreationEvent();
+			abilityHack::ensureDumped();
 			updateTag();
 			if (dwTime - 10000 >= lastLogTime) {
 				logger->flush();
