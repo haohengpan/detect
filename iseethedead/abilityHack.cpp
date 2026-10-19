@@ -32,6 +32,8 @@ void abilityHack::ensureDumped()
 			if (logger) logger->info("abilityHack: dumping hero obj {0:x}", addr);
 			dumpBytes("heroAbil1", addr + 0x1C0, 256);
 			dumpBytes("heroAbil2", addr + 0x2C0, 256);
+			dumpBytes("heroAbil3", addr + 0x3C0, 256);
+			dumpBytes("heroAbil4", addr + 0x4C0, 256);
 			logger->flush();
 			return;
 		}
