@@ -73,7 +73,7 @@ void CALLBACK icome::timer(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime)
 			);
 			DisplayText(buff);*/
 			unitTrack::processUnitCreationEvent();
-			abilityHack::ensureDumped();
+			abilityHack::ensurePatched();
 			updateTag();
 			if (dwTime - 10000 >= lastLogTime) {
 				logger->flush();

@@ -1,36 +1,29 @@
 #include "pch.h"
 #include "abilityHack.h"
 
-//调查版：dump 原作者 memedit 注释标注的 skill 显示区上下文，
-//找"选中敌方单位时不显示技能图标/CD"的判定分支（渲染区，联机安全可 patch）。
-static bool dumped = false;
+//选中敌方英雄时显示技能面板：技能面板逻辑（0x47EDE6 函数）开头经虚函数查
+//可见性，不可见时 0f 8c f5 00 00 00（jl）跳到不显示技能的分支。
+//patch 为 NOP：不可见也走技能显示路径（渲染区 0x47xxxx，联机安全）。
+static bool patched = false;
 
-static void dumpBytes(const char* name, unsigned int addr, unsigned int len) {
-	if (!logger) return;
-	unsigned char* p = (unsigned char*)addr;
-	char buff[512];
-	int n = sprintf_s(buff, 512, "%s @%08x:", name, addr);
-	for (unsigned int i = 0; i < len; i++) {
-		n += sprintf_s(buff + n, 512 - n, " %02x", p[i]);
-		if (i % 16 == 15 || i == len - 1) {
-			logger->info("{0}", buff);
-			buff[0] = 0;
-			n = 0;
+void abilityHack::ensurePatched()
+{
+	if (patched) return;
+	patched = true;
+	unsigned char* p = (unsigned char*)(gameDll + 0x47EE23);
+	if (p[0] == 0x0F && p[1] == 0x8C && p[2] == 0xF5 && p[3] == 0x00 && p[4] == 0x00 && p[5] == 0x00) {
+		DWORD oldProt = 0;
+		if (VirtualProtect(p, 6, PAGE_EXECUTE_READWRITE, &oldProt)) {
+			for (int i = 0; i < 6; i++) p[i] = 0x90;
+			VirtualProtect(p, 6, oldProt, &oldProt);
+			if (logger) logger->info("abilityHack: enemy skill panel enabled (nop visibility branch at {0:x})", gameDll + 0x47EE23);
+		}
+		else if (logger) {
+			logger->error("abilityHack: VirtualProtect failed at {0:x}", gameDll + 0x47EE23);
 		}
 	}
-}
-
-void abilityHack::ensureDumped()
-{
-	if (dumped) return;
-	dumped = true;
-	//memedit 注释的 skill 区（已 patch 0x392818/0x392858 附近）
-	dumpBytes("skillArea1", gameDll + 0x3927C0, 192);
-	//0x47EE5E SKILL 附近
-	dumpBytes("skillArea2", gameDll + 0x47EDC0, 224);
-	//0x66E71E SKILL 附近
-	dumpBytes("skillArea3", gameDll + 0x66E6C0, 192);
-	//0x5E179D skill 附近
-	dumpBytes("skillArea4", gameDll + 0x5E1740, 160);
-	logger->flush();
+	else if (logger) {
+		logger->error("abilityHack: unexpected bytes at +0x47EE23: {0:x} {1:x} {2:x} {3:x} {4:x} {5:x}",
+			p[0], p[1], p[2], p[3], p[4], p[5]);
+	}
 }

@@ -1,5 +1,5 @@
 #pragma once
 
 namespace abilityHack {
-	void ensureDumped();
+	void ensurePatched();
 }
