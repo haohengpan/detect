@@ -34,18 +34,14 @@ void abilityHack::ensurePatched()
 	else if (logger) {
 		logger->error("abilityHack: unexpected bytes at +0x47EE5D: {0:x} {1:x} {2:x}", p[0], p[1], p[2]);
 	}
-	//2) 本地归属判定恒 true（a1 38 42 5d 79 56 ... 函数，29 字节）
-	unsigned char* p2 = (unsigned char*)(gameDll + 0x66E6DC);
-	if (p2[0] == 0xA1 && p2[1] == 0x38 && p2[2] == 0x42 && p2[7] == 0x56) {
+	//2) 0x66E6DC：该函数被平台 hook（入口已是跳板+INT3，平台在此实现敌方
+	//   技能隐藏的可见性条件）。直接覆盖为恒 true，绕过平台 hook。
+	{
 		unsigned char trueFn[29];
 		trueFn[0] = 0xB0;	//mov al,1
 		trueFn[1] = 0x01;
 		trueFn[2] = 0xC3;	//ret
 		for (int i = 3; i < 29; i++) trueFn[i] = 0x90;
-		patchBytes(gameDll + 0x66E6DC, trueFn, 29, "local-owner check -> always true");
-	}
-	else if (logger) {
-		logger->error("abilityHack: unexpected bytes at +0x66E6DC: {0:x} {1:x} {2:x} {3:x}",
-			p2[0], p2[1], p2[2], p2[7]);
+		patchBytes(gameDll + 0x66E6DC, trueFn, 29, "local-owner check override (bypass platform hook)");
 	}
 }
