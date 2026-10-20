@@ -338,28 +338,35 @@ void MiniMapHack::DrawEnemyHeroes()
 	//单机/联机均自绘敌方英雄位置标记：玩家颜色 7x7 色块 + 白色描边（9x9 外圈）
 	//+ 中心玩家编号数字（白字黑边，玩家号唯一对应英雄）。
 	//直接写小地图缓冲，纯渲染层、同步零影响。
-	auto drawDigit = [this](int x, int y, int d, uint32_t color) {
+	auto drawDigit = [this](int x, int y, int d, uint32_t color, int scale) {
 		for (int row = 0; row < 5; row++) {
 			unsigned char m = digitMasks[d][row];
 			for (int col = 0; col < 3; col++) {
-				if (m & (1 << col)) DrawPixel(x + col, y + row, color);
+				if (m & (1 << col)) {
+					for (int sy = 0; sy < scale; sy++) {
+						for (int sx = 0; sx < scale; sx++) {
+							DrawPixel(x + col * scale + sx, y + row * scale + sy, color);
+						}
+					}
+				}
 			}
 		}
 	};
 	auto drawNumber = [&](int cx, int y, unsigned int num) {
+		const int scale = 2;
 		int tens = -1, ones = num % 10;
 		if (num >= 10) tens = num / 10;
-		int startX = (tens >= 0) ? (cx - 3) : (cx - 1);
+		int startX = (tens >= 0) ? (cx - 6) : (cx - 3);
 		auto stamp = [&](int sx, int sd) {
-			drawDigit(sx - 1, y, sd, 0xff000000);
-			drawDigit(sx + 1, y, sd, 0xff000000);
-			drawDigit(sx, y - 1, sd, 0xff000000);
-			drawDigit(sx, y + 1, sd, 0xff000000);
-			drawDigit(sx, y, sd, 0xffffffff);
+			drawDigit(sx - scale, y, sd, 0xff000000, scale);
+			drawDigit(sx + scale, y, sd, 0xff000000, scale);
+			drawDigit(sx, y - scale, sd, 0xff000000, scale);
+			drawDigit(sx, y + scale, sd, 0xff000000, scale);
+			drawDigit(sx, y, sd, 0xffffffff, scale);
 		};
 		if (tens >= 0) {
 			stamp(startX, tens);
-			stamp(startX + 4, ones);
+			stamp(startX + 7, ones);
 		}
 		else {
 			stamp(startX, num);
@@ -387,8 +394,8 @@ void MiniMapHack::DrawEnemyHeroes()
 			DrawPixel(loc.X - 7, loc.Y + d, 0xffffffff);
 			DrawPixel(loc.X + 7, loc.Y + d, 0xffffffff);
 		}
-		//中心玩家编号数字（白字黑边）
-		drawNumber(loc.X, loc.Y - 2, u->getPlayerSlot() + 1);
+		//中心玩家编号数字（白字黑边，2x 放大）
+		drawNumber(loc.X, loc.Y - 5, u->getPlayerSlot() + 1);
 	}
 }
 
